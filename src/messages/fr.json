@@ -193,13 +193,18 @@
     "title": "Clients",
     "subtitle": "Votre portefeuille client",
     "add": "Ajouter un client",
+    "edit": "Modifier le client",
     "name": "Nom",
     "email": "Email",
     "phone": "Téléphone",
     "address": "Adresse",
     "notes": "Notes",
     "save": "Enregistrer",
-    "empty": "Aucun client enregistré."
+    "empty": "Aucun client enregistré.",
+    "documents": "Documents associés",
+    "searchDocuments": "Rechercher un document…",
+    "noUnassignedDocs": "Aucun document disponible.",
+    "actions": "Actions"
   },
   "invoices": {
     "title": "Factures",

@@ -196,26 +196,6 @@ export default function NewTemplatePage() {
       await supabase.from("template_variables").insert(payload);
     }
 
-    if (prefillValues && prefillFile) {
-      const keyedValues: Record<string, string> = {};
-      for (const v of variables) {
-        const k = slug(v.key);
-        if (prefillValues[k] !== undefined) keyedValues[k] = prefillValues[k];
-      }
-      const docName = `${name} — ${prefillFile.name.replace(/\.[^.]+$/, "")}`;
-      const { error: docErr } = await supabase.from("documents").insert({
-        template_id: tpl.id,
-        name: docName,
-        status: "brouillon",
-        filled_data: keyedValues,
-        created_by: user.user.id,
-      });
-      if (docErr) {
-        console.error("[templates/new] document insert failed:", docErr.message);
-        toast.error(`${t("saved")} — document non créé (${docErr.message})`);
-      }
-    }
-
     toast.success(t("saved"));
     router.push(`/${locale}/templates/${tpl.id}/edit`);
   };

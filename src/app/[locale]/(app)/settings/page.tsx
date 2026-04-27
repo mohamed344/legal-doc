@@ -21,7 +21,7 @@ export default function SettingsPage() {
   };
 
   return (
-    <div className="space-y-8 animate-fade-in max-w-3xl">
+    <div className="space-y-8 animate-fade-in max-w-3xl mx-auto">
       <header>
         <div className="text-xs uppercase tracking-[0.22em] text-terracotta-deep mb-2">Configuration</div>
         <h1 className="font-display text-display-2">{t("title")}</h1>

@@ -1,5 +1,6 @@
 "use client";
 
+import { useEffect, useState } from "react";
 import Link from "next/link";
 import { useLocale, useTranslations } from "next-intl";
 import { FileText, FolderOpen, Receipt, Users, Sparkles, ArrowUpRight } from "lucide-react";
@@ -7,6 +8,9 @@ import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
 import { Button } from "@/components/ui/button";
 import { Badge } from "@/components/ui/badge";
 import { useAuth } from "@/context/auth-context";
+import { createClient } from "@/lib/supabase/client";
+
+type StatKey = "templates" | "monthlyDocs" | "pendingInvoices" | "clients";
 
 export default function DashboardPage() {
   const t = useTranslations("dashboard");
@@ -16,12 +20,74 @@ export default function DashboardPage() {
 
   const firstName = profile?.full_name?.split(" ")[0] ?? "";
 
-  const stats = [
-    { labelKey: "templates", value: 0, icon: FileText },
-    { labelKey: "monthlyDocs", value: 0, icon: FolderOpen },
-    { labelKey: "pendingInvoices", value: 0, icon: Receipt },
-    { labelKey: "clients", value: 0, icon: Users },
-  ] as const;
+  const [counts, setCounts] = useState<Record<StatKey, number>>({
+    templates: 0,
+    monthlyDocs: 0,
+    pendingInvoices: 0,
+    clients: 0,
+  });
+  const [latestDoc, setLatestDoc] = useState<{ id: string; name: string } | null>(null);
+  const [loading, setLoading] = useState(true);
+
+  useEffect(() => {
+    let cancelled = false;
+    const load = async () => {
+      const supabase = createClient();
+      const monthStart = new Date();
+      monthStart.setDate(1);
+      monthStart.setHours(0, 0, 0, 0);
+
+      const [templatesRes, monthlyDocsRes, pendingInvoicesRes, clientsRes, latestDocRes] =
+        await Promise.all([
+          supabase
+            .from("templates")
+            .select("*", { count: "exact", head: true })
+            .eq("is_archived", false),
+          supabase
+            .from("documents")
+            .select("*", { count: "exact", head: true })
+            .eq("is_archived", false)
+            .gte("created_at", monthStart.toISOString()),
+          supabase
+            .from("invoices")
+            .select("*", { count: "exact", head: true })
+            .eq("is_archived", false)
+            .neq("status", "payee"),
+          supabase.from("clients").select("*", { count: "exact", head: true }),
+          supabase
+            .from("documents")
+            .select("id, name, updated_at")
+            .eq("is_archived", false)
+            .order("updated_at", { ascending: false })
+            .limit(1)
+            .maybeSingle(),
+        ]);
+
+      if (cancelled) return;
+
+      setCounts({
+        templates: templatesRes.count ?? 0,
+        monthlyDocs: monthlyDocsRes.count ?? 0,
+        pendingInvoices: pendingInvoicesRes.count ?? 0,
+        clients: clientsRes.count ?? 0,
+      });
+      const doc = latestDocRes.data as { id: string; name: string } | null;
+      setLatestDoc(doc ? { id: doc.id, name: doc.name } : null);
+      setLoading(false);
+    };
+
+    load();
+    return () => {
+      cancelled = true;
+    };
+  }, []);
+
+  const stats: { labelKey: StatKey; icon: typeof FileText }[] = [
+    { labelKey: "templates", icon: FileText },
+    { labelKey: "monthlyDocs", icon: FolderOpen },
+    { labelKey: "pendingInvoices", icon: Receipt },
+    { labelKey: "clients", icon: Users },
+  ];
 
   return (
     <div className="space-y-10 animate-fade-in">
@@ -48,7 +114,7 @@ export default function DashboardPage() {
                   {t("latestDocument")}
                 </Badge>
                 <CardTitle className="text-2xl md:text-3xl max-w-md">
-                  {t("noLatest")}
+                  {latestDoc ? latestDoc.name : t("noLatest")}
                 </CardTitle>
               </div>
               <div className="hidden md:flex h-20 w-20 items-center justify-center rounded-full bg-forest/10">
@@ -58,7 +124,13 @@ export default function DashboardPage() {
           </CardHeader>
           <CardContent className="relative">
             <Button asChild variant="default">
-              <Link href={`/${locale}/templates`}>
+              <Link
+                href={
+                  latestDoc
+                    ? `/${locale}/documents/${latestDoc.id}`
+                    : `/${locale}/templates`
+                }
+              >
                 {tActions("newTemplate")}
                 <ArrowUpRight className="h-4 w-4" />
               </Link>
@@ -93,7 +165,9 @@ export default function DashboardPage() {
                   </span>
                   <Icon className="h-4 w-4 text-muted-foreground" />
                 </div>
-                <div className="numerals-display text-4xl text-foreground">{s.value}</div>
+                <div className="numerals-display text-4xl text-foreground">
+                  {loading ? <span className="text-muted-foreground/50">—</span> : counts[s.labelKey]}
+                </div>
               </CardContent>
             </Card>
           );
