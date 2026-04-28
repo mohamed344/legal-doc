@@ -41,11 +41,14 @@ export async function GET(_req: Request, { params }: { params: Promise<{ id: str
 
   const pdf = await renderHtmlToPdf(filled, { title: doc.name });
 
+  const safeName = sanitize(doc.name);
+  const asciiFallback = toAscii(safeName);
+
   return new Response(new Uint8Array(pdf), {
     status: 200,
     headers: {
       "content-type": "application/pdf",
-      "content-disposition": `inline; filename="${sanitize(doc.name)}.pdf"`,
+      "content-disposition": `inline; filename="${asciiFallback}.pdf"; filename*=UTF-8''${encodeURIComponent(safeName)}.pdf`,
       "cache-control": "private, no-store",
     },
   });
@@ -53,4 +56,9 @@ export async function GET(_req: Request, { params }: { params: Promise<{ id: str
 
 function sanitize(s: string): string {
   return s.replace(/[^\p{L}\p{N}_\- .]/gu, "_").slice(0, 120) || "document";
+}
+
+function toAscii(s: string): string {
+  const stripped = s.replace(/[^\x20-\x7E]/g, "_").replace(/"/g, "_").trim();
+  return stripped || "document";
 }
