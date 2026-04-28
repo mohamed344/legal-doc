@@ -1,17 +1,22 @@
 import type { Role } from "./supabase/types";
 
-export type Resource =
-  | "templates"
-  | "documents"
-  | "clients"
-  | "invoices"
-  | "employees"
-  | "settings"
-  | "ai_import"
-  | "upload"
-  | "archives";
+export const RESOURCES = [
+  "templates",
+  "documents",
+  "clients",
+  "invoices",
+  "employees",
+  "settings",
+  "ai_import",
+  "upload",
+  "archives",
+] as const;
 
-export type Action = "read" | "create" | "update" | "delete";
+export type Resource = (typeof RESOURCES)[number];
+
+export const ACTIONS = ["read", "create", "update", "delete"] as const;
+
+export type Action = (typeof ACTIONS)[number];
 
 const MATRIX: Record<Role, Record<Resource, Action[]>> = {
   admin: {

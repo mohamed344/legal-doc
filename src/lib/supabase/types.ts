@@ -13,8 +13,22 @@ export interface AppUser {
   avatar_url: string | null;
   last_login_at: string | null;
   role: Role;
+  role_id: string | null;
   is_active: boolean;
   created_at: string;
+}
+
+export interface AppRole {
+  id: string;
+  name: string;
+  is_system: boolean;
+  created_at: string;
+}
+
+export interface RolePermissionRow {
+  role_id: string;
+  page: string;
+  action: string;
 }
 
 export interface Template {

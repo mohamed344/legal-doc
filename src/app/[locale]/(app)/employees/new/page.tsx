@@ -7,26 +7,34 @@ import { useForm } from "react-hook-form";
 import { zodResolver } from "@hookform/resolvers/zod";
 import { z } from "zod";
 import { toast } from "sonner";
-import { ArrowLeft, Loader2, ShieldAlert } from "lucide-react";
+import { ArrowLeft, Loader2, ShieldAlert, Plus, X } from "lucide-react";
 import { Button } from "@/components/ui/button";
 import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
 import { Input } from "@/components/ui/input";
 import { PasswordInput } from "@/components/ui/password-input";
 import { Label } from "@/components/ui/label";
 import { Switch } from "@/components/ui/switch";
-import { Checkbox } from "@/components/ui/checkbox";
+import {
+  Select,
+  SelectContent,
+  SelectItem,
+  SelectTrigger,
+  SelectValue,
+} from "@/components/ui/select";
 import { EmptyState } from "@/components/empty-states/empty";
-import { createClient } from "@/lib/supabase/client";
 import { useAuth } from "@/context/auth-context";
 import { friendlyAuthError } from "@/lib/friendly-errors";
-import type { Template } from "@/lib/supabase/types";
+import {
+  RolePermissionGrid,
+  emptyGrants,
+  grantsToList,
+  type GrantMap,
+} from "@/components/employees/role-permission-grid";
 
-type TemplateRow = Pick<Template, "id" | "name" | "category">;
-
-interface PermissionState {
-  selected: boolean;
-  can_create: boolean;
-  can_edit: boolean;
+interface RoleOption {
+  id: string;
+  name: string;
+  is_system: boolean;
 }
 
 export default function NewEmployeePage() {
@@ -35,8 +43,12 @@ export default function NewEmployeePage() {
   const locale = useLocale() as "fr" | "ar";
   const router = useRouter();
   const { profile } = useAuth();
-  const [templates, setTemplates] = useState<TemplateRow[] | null>(null);
-  const [perms, setPerms] = useState<Record<string, PermissionState>>({});
+
+  const [roles, setRoles] = useState<RoleOption[] | null>(null);
+  const [mode, setMode] = useState<"existing" | "new">("existing");
+  const [selectedRoleId, setSelectedRoleId] = useState<string>("");
+  const [newRoleName, setNewRoleName] = useState("");
+  const [newRoleGrants, setNewRoleGrants] = useState<GrantMap>(emptyGrants());
   const [submitting, setSubmitting] = useState(false);
 
   const schema = z.object({
@@ -55,11 +67,16 @@ export default function NewEmployeePage() {
 
   useEffect(() => {
     const load = async () => {
-      const { data } = await createClient()
-        .from("templates")
-        .select("id, name, category")
-        .order("name", { ascending: true });
-      setTemplates((data as TemplateRow[]) ?? []);
+      const res = await fetch("/api/admin/roles", { cache: "no-store" });
+      const data = await res.json();
+      if (data.ok) {
+        const list = (data.roles ?? []) as RoleOption[];
+        setRoles(list);
+        const firstNonSystem = list.find((r) => !r.is_system);
+        if (firstNonSystem) setSelectedRoleId(firstNonSystem.id);
+      } else {
+        setRoles([]);
+      }
     };
     load();
   }, []);
@@ -70,34 +87,49 @@ export default function NewEmployeePage() {
     );
   }
 
-  const togglePerm = (id: string, key: "selected" | "can_create" | "can_edit") => {
-    setPerms((prev) => {
-      const current = prev[id] ?? { selected: false, can_create: true, can_edit: false };
-      const next = { ...current, [key]: !current[key] };
-      if (key === "can_create" || key === "can_edit") {
-        next.selected = next.can_create || next.can_edit;
-      } else if (key === "selected" && next.selected && !current.can_create && !current.can_edit) {
-        next.can_create = true;
-      }
-      return { ...prev, [id]: next };
-    });
-  };
-
   const onSubmit = async (values: FormValues) => {
-    setSubmitting(true);
-    const permissions = Object.entries(perms)
-      .filter(([, p]) => p.selected && (p.can_create || p.can_edit))
-      .map(([template_id, p]) => ({
-        template_id,
-        can_create: p.can_create,
-        can_edit: p.can_edit,
-      }));
+    let role_id: string | null = null;
 
+    if (mode === "existing") {
+      if (!selectedRoleId) {
+        toast.error(t("roleRequired"));
+        return;
+      }
+      role_id = selectedRoleId;
+    } else {
+      const trimmed = newRoleName.trim();
+      if (trimmed.length < 2) {
+        toast.error(t("roleNameRequired"));
+        return;
+      }
+    }
+
+    setSubmitting(true);
     try {
+      if (mode === "new") {
+        const trimmed = newRoleName.trim();
+        const permissions = grantsToList(newRoleGrants);
+        const roleRes = await fetch("/api/admin/roles", {
+          method: "POST",
+          headers: { "Content-Type": "application/json" },
+          body: JSON.stringify({ name: trimmed, permissions }),
+        });
+        const roleData = await roleRes.json();
+        if (!roleRes.ok || !roleData.ok) {
+          toast.error(
+            roleRes.status === 409
+              ? t("errors.roleCreateFailed")
+              : roleData.error ?? t("errors.roleCreateFailed")
+          );
+          return;
+        }
+        role_id = roleData.role.id;
+      }
+
       const res = await fetch("/api/admin/users", {
         method: "POST",
         headers: { "Content-Type": "application/json" },
-        body: JSON.stringify({ ...values, permissions }),
+        body: JSON.stringify({ ...values, role_id }),
       });
       const data = await res.json();
       if (!res.ok || !data.ok) {
@@ -113,6 +145,8 @@ export default function NewEmployeePage() {
       setSubmitting(false);
     }
   };
+
+  const assignableRoles = (roles ?? []).filter((r) => !r.is_system);
 
   return (
     <div className="space-y-8 animate-fade-in max-w-3xl mx-auto">
@@ -179,54 +213,71 @@ export default function NewEmployeePage() {
 
         <Card>
           <CardHeader>
-            <CardTitle>{t("permissionsTitle")}</CardTitle>
-            <p className="text-sm text-muted-foreground">{t("permissionsSubtitle")}</p>
+            <CardTitle>{t("roleTitle")}</CardTitle>
+            <p className="text-sm text-muted-foreground">{t("roleSubtitle")}</p>
           </CardHeader>
-          <CardContent>
-            {templates === null ? (
-              <div className="text-muted-foreground text-sm">Chargement…</div>
-            ) : templates.length === 0 ? (
-              <div className="text-muted-foreground text-sm">{t("noTemplates")}</div>
+          <CardContent className="space-y-4">
+            {mode === "existing" ? (
+              <>
+                <div>
+                  <Label>{t("selectRole")}</Label>
+                  {roles === null ? (
+                    <div className="text-muted-foreground text-sm">…</div>
+                  ) : assignableRoles.length === 0 ? (
+                    <div className="text-muted-foreground text-sm">{t("noRoles")}</div>
+                  ) : (
+                    <Select value={selectedRoleId} onValueChange={setSelectedRoleId}>
+                      <SelectTrigger>
+                        <SelectValue placeholder={t("selectRolePlaceholder")} />
+                      </SelectTrigger>
+                      <SelectContent>
+                        {assignableRoles.map((r) => (
+                          <SelectItem key={r.id} value={r.id}>
+                            {r.name}
+                          </SelectItem>
+                        ))}
+                      </SelectContent>
+                    </Select>
+                  )}
+                </div>
+                <Button
+                  type="button"
+                  variant="outline"
+                  size="sm"
+                  onClick={() => setMode("new")}
+                >
+                  <Plus className="h-4 w-4" />
+                  {t("createNewRole")}
+                </Button>
+              </>
             ) : (
-              <div className="divide-y divide-border/60">
-                {templates.map((tpl) => {
-                  const state = perms[tpl.id] ?? { selected: false, can_create: true, can_edit: false };
-                  return (
-                    <div key={tpl.id} className="flex items-center justify-between gap-4 py-3">
-                      <div className="flex items-center gap-3 min-w-0">
-                        <Checkbox
-                          checked={state.selected}
-                          onCheckedChange={() => togglePerm(tpl.id, "selected")}
-                        />
-                        <div className="min-w-0">
-                          <div className="font-medium text-sm truncate">{tpl.name}</div>
-                          {tpl.category && (
-                            <div className="text-xs text-muted-foreground">{tpl.category}</div>
-                          )}
-                        </div>
-                      </div>
-                      <div className="flex items-center gap-4 text-sm">
-                        <label className="flex items-center gap-2 cursor-pointer">
-                          <Checkbox
-                            checked={state.can_create}
-                            disabled={!state.selected}
-                            onCheckedChange={() => togglePerm(tpl.id, "can_create")}
-                          />
-                          <span>{t("canCreate")}</span>
-                        </label>
-                        <label className="flex items-center gap-2 cursor-pointer">
-                          <Checkbox
-                            checked={state.can_edit}
-                            disabled={!state.selected}
-                            onCheckedChange={() => togglePerm(tpl.id, "can_edit")}
-                          />
-                          <span>{t("canEdit")}</span>
-                        </label>
-                      </div>
-                    </div>
-                  );
-                })}
-              </div>
+              <>
+                <div>
+                  <div className="flex items-center justify-between">
+                    <Label htmlFor="new_role_name">{t("roleName")}</Label>
+                    <Button
+                      type="button"
+                      variant="ghost"
+                      size="sm"
+                      onClick={() => setMode("existing")}
+                    >
+                      <X className="h-4 w-4" />
+                      {t("useExistingRole")}
+                    </Button>
+                  </div>
+                  <Input
+                    id="new_role_name"
+                    value={newRoleName}
+                    onChange={(e) => setNewRoleName(e.target.value)}
+                    placeholder={t("roleName")}
+                  />
+                </div>
+                <RolePermissionGrid
+                  value={newRoleGrants}
+                  onChange={setNewRoleGrants}
+                  disabled={submitting}
+                />
+              </>
             )}
           </CardContent>
         </Card>

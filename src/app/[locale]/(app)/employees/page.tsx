@@ -3,7 +3,7 @@
 import { useEffect, useState } from "react";
 import Link from "next/link";
 import { useLocale, useTranslations } from "next-intl";
-import { UsersRound, ShieldAlert, Plus } from "lucide-react";
+import { UsersRound, ShieldAlert, Plus, ShieldCheck } from "lucide-react";
 import { toast } from "sonner";
 import { Button } from "@/components/ui/button";
 import { Card } from "@/components/ui/card";
@@ -19,6 +19,7 @@ import type { AppUser } from "@/lib/supabase/types";
 
 export default function EmployeesPage() {
   const t = useTranslations("employees");
+  const tRoles = useTranslations("employees.roles");
   const locale = useLocale() as "fr" | "ar";
   const { profile } = useAuth();
   const [rows, setRows] = useState<AppUser[] | null>(null);
@@ -58,12 +59,20 @@ export default function EmployeesPage() {
           <h1 className="font-display text-display-2">{t("title")}</h1>
           <p className="text-muted-foreground mt-1">{t("subtitle")}</p>
         </div>
-        <Button asChild>
-          <Link href={`/${locale}/employees/new`}>
-            <Plus className="h-4 w-4" />
-            {t("add")}
-          </Link>
-        </Button>
+        <div className="flex flex-wrap gap-2">
+          <Button variant="outline" asChild>
+            <Link href={`/${locale}/employees/roles`}>
+              <ShieldCheck className="h-4 w-4" />
+              {tRoles("manageRoles")}
+            </Link>
+          </Button>
+          <Button asChild>
+            <Link href={`/${locale}/employees/new`}>
+              <Plus className="h-4 w-4" />
+              {t("add")}
+            </Link>
+          </Button>
+        </div>
       </header>
 
       {rows === null ? (

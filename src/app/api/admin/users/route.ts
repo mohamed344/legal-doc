@@ -2,19 +2,13 @@ import { NextResponse } from "next/server";
 import { createClient } from "@/lib/supabase/server";
 import { createAdminClient } from "@/lib/supabase/admin";
 
-interface PermissionInput {
-  template_id: string;
-  can_create: boolean;
-  can_edit: boolean;
-}
-
 interface CreateUserBody {
   full_name: string;
   email: string;
   password: string;
   role: "employe";
   is_active: boolean;
-  permissions?: PermissionInput[];
+  role_id?: string | null;
 }
 
 export async function POST(request: Request) {
@@ -55,6 +49,19 @@ export async function POST(request: Request) {
 
   const admin = createAdminClient();
 
+  let resolvedRoleId: string | null = null;
+  if (body.role_id) {
+    const { data: roleRow } = await admin
+      .from("roles")
+      .select("id")
+      .eq("id", body.role_id)
+      .single();
+    if (!roleRow) {
+      return NextResponse.json({ ok: false, error: "invalid_role_id" }, { status: 400 });
+    }
+    resolvedRoleId = roleRow.id;
+  }
+
   const { data: created, error: createErr } = await admin.auth.admin.createUser({
     email: body.email,
     password: body.password,
@@ -78,6 +85,7 @@ export async function POST(request: Request) {
       is_active: body.is_active,
       full_name: body.full_name,
       email: body.email,
+      role_id: resolvedRoleId,
     })
     .eq("user_id", newUserId)
     .select("id")
@@ -89,28 +97,6 @@ export async function POST(request: Request) {
       { ok: false, error: updateErr?.message ?? "profile_update_failed" },
       { status: 500 }
     );
-  }
-
-  if (body.role === "employe" && Array.isArray(body.permissions) && body.permissions.length > 0) {
-    const rows = body.permissions
-      .filter((p) => p && typeof p.template_id === "string")
-      .map((p) => ({
-        user_id: updatedProfile.id,
-        template_id: p.template_id,
-        can_create: !!p.can_create,
-        can_edit: !!p.can_edit,
-      }));
-
-    if (rows.length > 0) {
-      const { error: permErr } = await admin.from("employee_permissions").insert(rows);
-      if (permErr) {
-        await admin.auth.admin.deleteUser(newUserId);
-        return NextResponse.json(
-          { ok: false, error: permErr.message },
-          { status: 500 }
-        );
-      }
-    }
   }
 
   return NextResponse.json({ ok: true, user_id: newUserId, users_row_id: updatedProfile.id });
