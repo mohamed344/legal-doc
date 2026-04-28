@@ -399,11 +399,26 @@
       "title": "Archiver un document externe",
       "pickTemplate": "Sélectionner un modèle",
       "pickFile": "Fichier à archiver",
+      "pickFiles": "Fichiers à archiver",
+      "addMoreFiles": "Ajouter d'autres fichiers",
+      "removeFile": "Retirer",
+      "noTemplate": "— Aucun modèle —",
       "name": "Nom de l'archive",
       "submit": "Téléverser et extraire",
+      "submitNoExtract": "Téléverser",
+      "submitMulti": "Téléverser le lot",
+      "uploadingProgress": "{done}/{total} téléversés",
+      "partialSuccess": "{ok} réussis, {failed} échoués",
+      "fileCount": "{count} fichiers",
       "extracting": "Analyse en cours…",
       "success": "Fichier archivé",
       "failed": "Échec de l'extraction"
+    },
+    "groupRow": {
+      "expand": "Afficher les fichiers",
+      "collapse": "Masquer",
+      "deleteGroup": "Supprimer le groupe",
+      "confirmDeleteGroup": "Supprimer définitivement les {count} fichiers de ce groupe ?"
     }
   },
   "common": {

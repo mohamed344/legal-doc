@@ -399,11 +399,26 @@
       "title": "أرشفة وثيقة خارجية",
       "pickTemplate": "اختر نموذجاً",
       "pickFile": "الملف المراد أرشفته",
+      "pickFiles": "ملفات للأرشفة",
+      "addMoreFiles": "إضافة ملفات أخرى",
+      "removeFile": "إزالة",
+      "noTemplate": "— بدون نموذج —",
       "name": "اسم الأرشيف",
       "submit": "تحميل واستخراج",
+      "submitNoExtract": "تحميل",
+      "submitMulti": "تحميل المجموعة",
+      "uploadingProgress": "{done}/{total} تم تحميله",
+      "partialSuccess": "{ok} نجحت، {failed} فشلت",
+      "fileCount": "{count} ملفات",
       "extracting": "جاري التحليل…",
       "success": "تم أرشفة الملف",
       "failed": "فشل الاستخراج"
+    },
+    "groupRow": {
+      "expand": "إظهار الملفات",
+      "collapse": "إخفاء",
+      "deleteGroup": "حذف المجموعة",
+      "confirmDeleteGroup": "هل تريد حذف الملفات الـ{count} في هذه المجموعة نهائياً؟"
     }
   },
   "common": {

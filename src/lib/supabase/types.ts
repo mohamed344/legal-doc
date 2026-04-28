@@ -117,6 +117,7 @@ export interface ArchivedUpload {
   file_size: number | null;
   extracted_data: Record<string, string>;
   notes: string | null;
+  batch_id: string | null;
   created_by: string;
   archived_at: string;
   created_at: string;

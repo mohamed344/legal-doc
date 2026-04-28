@@ -1,9 +1,11 @@
 "use client";
 
-import { useEffect, useMemo, useState } from "react";
+import { Fragment, useEffect, useMemo, useState } from "react";
 import { useLocale, useTranslations } from "next-intl";
 import {
   Archive,
+  ChevronDown,
+  ChevronRight,
   Download,
   FileUp,
   FolderOpen,
@@ -13,6 +15,7 @@ import {
   ShieldAlert,
   Trash2,
   Upload,
+  X,
 } from "lucide-react";
 import { toast } from "sonner";
 import { Button } from "@/components/ui/button";
@@ -60,6 +63,20 @@ function formatBytes(n: number | null): string {
   return `${(n / 1024 / 1024).toFixed(1)} MB`;
 }
 
+const NO_TEMPLATE = "__none__";
+
+type UploadEntry =
+  | { kind: "single"; item: ArchivedUpload; latest: string }
+  | { kind: "batch"; batchId: string; items: ArchivedUpload[]; latest: string; name: string };
+
+const runPool = async <T,>(items: T[], n: number, fn: (item: T) => Promise<void>) => {
+  const queue = [...items];
+  const workers = Array.from({ length: Math.min(n, queue.length) }, async () => {
+    while (queue.length) await fn(queue.shift()!);
+  });
+  await Promise.all(workers);
+};
+
 export default function ArchivesPage() {
   const t = useTranslations("archives");
   const tUpload = useTranslations("archives.upload");
@@ -76,10 +93,16 @@ export default function ArchivesPage() {
   const [tab, setTab] = useState("documents");
 
   const [modalOpen, setModalOpen] = useState(false);
-  const [pickedTemplate, setPickedTemplate] = useState<string>("");
-  const [pickedFile, setPickedFile] = useState<File | null>(null);
+  const [pickedTemplate, setPickedTemplate] = useState<string>(NO_TEMPLATE);
+  const [pickedFiles, setPickedFiles] = useState<File[]>([]);
   const [archiveName, setArchiveName] = useState("");
   const [submitting, setSubmitting] = useState(false);
+  const [progress, setProgress] = useState<{ done: number; total: number; failed: string[] }>({
+    done: 0,
+    total: 0,
+    failed: [],
+  });
+  const [expandedBatches, setExpandedBatches] = useState<Set<string>>(new Set());
 
   const load = async () => {
     const s = createClient();
@@ -109,6 +132,38 @@ export default function ArchivesPage() {
     () => Object.fromEntries(templates.map((tpl) => [tpl.id, tpl])),
     [templates],
   );
+
+  const uploadEntries: UploadEntry[] | null = useMemo(() => {
+    if (!uploads) return null;
+    const standalone: ArchivedUpload[] = [];
+    const batches = new Map<string, ArchivedUpload[]>();
+    for (const u of uploads) {
+      if (u.batch_id) {
+        const arr = batches.get(u.batch_id) ?? [];
+        arr.push(u);
+        batches.set(u.batch_id, arr);
+      } else {
+        standalone.push(u);
+      }
+    }
+    const entries: UploadEntry[] = standalone.map((item) => ({
+      kind: "single",
+      item,
+      latest: item.archived_at,
+    }));
+    for (const [batchId, items] of batches) {
+      const sortedItems = [...items].sort((a, b) => (a.archived_at < b.archived_at ? 1 : -1));
+      entries.push({
+        kind: "batch",
+        batchId,
+        items: sortedItems,
+        latest: sortedItems[0].archived_at,
+        name: sortedItems[0].name,
+      });
+    }
+    entries.sort((a, b) => (a.latest < b.latest ? 1 : -1));
+    return entries;
+  }, [uploads]);
 
   if (profile && profile.role !== "admin") {
     return (
@@ -164,11 +219,33 @@ export default function ArchivesPage() {
     load();
   };
 
+  const deleteBatch = async (batchId: string, count: number) => {
+    if (!window.confirm(t("groupRow.confirmDeleteGroup", { count }))) return;
+    const res = await fetch(`/api/archives/uploads?batch_id=${batchId}`, { method: "DELETE" });
+    const body = await res.json().catch(() => null);
+    if (!res.ok || !body?.ok) {
+      toast.error(body?.error ?? t("deleted"));
+      return;
+    }
+    toast.success(t("deleted"));
+    load();
+  };
+
+  const toggleBatch = (batchId: string) => {
+    setExpandedBatches((prev) => {
+      const next = new Set(prev);
+      if (next.has(batchId)) next.delete(batchId);
+      else next.add(batchId);
+      return next;
+    });
+  };
+
   const resetModal = () => {
-    setPickedTemplate("");
-    setPickedFile(null);
+    setPickedTemplate(NO_TEMPLATE);
+    setPickedFiles([]);
     setArchiveName("");
     setSubmitting(false);
+    setProgress({ done: 0, total: 0, failed: [] });
   };
 
   const openModal = () => {
@@ -176,37 +253,86 @@ export default function ArchivesPage() {
     setModalOpen(true);
   };
 
-  const onPickFile = (f: File | null) => {
-    setPickedFile(f);
-    if (f && !archiveName.trim()) {
-      const dot = f.name.lastIndexOf(".");
-      setArchiveName(dot > 0 ? f.name.slice(0, dot) : f.name);
+  const onPickFiles = (files: FileList | null) => {
+    if (!files || files.length === 0) return;
+    const incoming = Array.from(files);
+    setPickedFiles((prev) => {
+      const seen = new Set(prev.map((f) => `${f.name}_${f.size}`));
+      const merged = [...prev];
+      for (const f of incoming) {
+        const key = `${f.name}_${f.size}`;
+        if (!seen.has(key)) {
+          merged.push(f);
+          seen.add(key);
+        }
+      }
+      return merged;
+    });
+    if (!archiveName.trim()) {
+      const first = incoming[0];
+      const dot = first.name.lastIndexOf(".");
+      setArchiveName(dot > 0 ? first.name.slice(0, dot) : first.name);
+    }
+  };
+
+  const removePickedFile = (idx: number) => {
+    setPickedFiles((prev) => prev.filter((_, i) => i !== idx));
+  };
+
+  const uploadOne = async (file: File, batchId: string | null, name: string) => {
+    const fd = new FormData();
+    fd.append("file", file);
+    if (pickedTemplate && pickedTemplate !== NO_TEMPLATE) {
+      fd.append("template_id", pickedTemplate);
+    }
+    if (batchId) fd.append("batch_id", batchId);
+    fd.append("name", name);
+    const res = await fetch("/api/archives/uploads", { method: "POST", body: fd });
+    const body = await res.json().catch(() => null);
+    if (!res.ok || !body?.ok) {
+      throw new Error(body?.message ?? body?.error ?? tUpload("failed"));
     }
   };
 
   const submitUpload = async () => {
-    if (!pickedFile || !pickedTemplate) return;
+    if (pickedFiles.length === 0) return;
     setSubmitting(true);
-    const fd = new FormData();
-    fd.append("file", pickedFile);
-    fd.append("template_id", pickedTemplate);
-    fd.append("name", archiveName.trim() || pickedFile.name);
-    try {
-      const res = await fetch("/api/archives/uploads", { method: "POST", body: fd });
-      const body = await res.json().catch(() => null);
-      if (!res.ok || !body?.ok) {
-        toast.error(body?.message ?? body?.error ?? tUpload("failed"));
-        setSubmitting(false);
-        return;
+    const sharedName = archiveName.trim() || pickedFiles[0].name;
+    const isBatch = pickedFiles.length > 1;
+    const batchId = isBatch ? crypto.randomUUID() : null;
+    const total = pickedFiles.length;
+    const failed: string[] = [];
+
+    setProgress({ done: 0, total, failed: [] });
+
+    await runPool(pickedFiles, 3, async (file) => {
+      try {
+        await uploadOne(file, batchId, sharedName);
+        setProgress((p) => ({ ...p, done: p.done + 1 }));
+      } catch (e) {
+        failed.push(file.name);
+        const msg = e instanceof Error ? e.message : tUpload("failed");
+        setProgress((p) => ({ ...p, done: p.done + 1, failed: [...p.failed, file.name] }));
+        console.error(`[archives-upload] ${file.name}: ${msg}`);
       }
+    });
+
+    if (failed.length === 0) {
       toast.success(tUpload("success"));
-      setModalOpen(false);
-      resetModal();
-      await load();
-      setTab("uploads");
-    } catch (e) {
-      toast.error(e instanceof Error ? e.message : tUpload("failed"));
-      setSubmitting(false);
+    } else if (failed.length === total) {
+      toast.error(tUpload("failed"));
+    } else {
+      toast.warning(
+        `${tUpload("partialSuccess", { ok: total - failed.length, failed: failed.length })}: ${failed.join(", ")}`,
+      );
+    }
+
+    setModalOpen(false);
+    resetModal();
+    await load();
+    setTab("uploads");
+    if (batchId) {
+      setExpandedBatches((prev) => new Set(prev).add(batchId));
     }
   };
 
@@ -345,15 +471,16 @@ export default function ArchivesPage() {
         </TabsContent>
 
         <TabsContent value="uploads">
-          {uploads === null ? (
+          {uploadEntries === null ? (
             <div className="text-muted-foreground">Chargement…</div>
-          ) : uploads.length === 0 ? (
+          ) : uploadEntries.length === 0 ? (
             <EmptyState icon={FileUp} title={t("emptyUploads")} description="" />
           ) : (
             <Card>
               <Table>
                 <TableHeader>
                   <TableRow>
+                    <TableHead className="w-8"></TableHead>
                     <TableHead>Nom</TableHead>
                     <TableHead>{t("columns.model")}</TableHead>
                     <TableHead>{t("columns.file")}</TableHead>
@@ -362,43 +489,149 @@ export default function ArchivesPage() {
                   </TableRow>
                 </TableHeader>
                 <TableBody>
-                  {uploads.map((u) => (
-                    <TableRow key={u.id}>
-                      <TableCell className="font-medium">{u.name}</TableCell>
-                      <TableCell className="text-muted-foreground">
-                        {u.template_id ? templatesById[u.template_id]?.name ?? "—" : "—"}
-                      </TableCell>
-                      <TableCell className="text-muted-foreground">
-                        <span className="truncate inline-block max-w-[240px] align-middle">{u.file_name}</span>
-                        <span className="ms-2 text-xs">({formatBytes(u.file_size)})</span>
-                      </TableCell>
-                      <TableCell className="text-muted-foreground">
-                        {formatDate(u.archived_at, locale)}
-                      </TableCell>
-                      <TableCell className="text-end">
-                        <div className="flex justify-end gap-1">
-                          <Button asChild variant="ghost" size="sm" title={t("download")}>
-                            <a
-                              href={`/api/archives/uploads?id=${u.id}`}
-                              target="_blank"
-                              rel="noopener"
+                  {uploadEntries.map((entry) => {
+                    if (entry.kind === "single") {
+                      const u = entry.item;
+                      return (
+                        <TableRow key={u.id}>
+                          <TableCell></TableCell>
+                          <TableCell className="font-medium">{u.name}</TableCell>
+                          <TableCell className="text-muted-foreground">
+                            {u.template_id ? templatesById[u.template_id]?.name ?? "—" : "—"}
+                          </TableCell>
+                          <TableCell className="text-muted-foreground">
+                            <span className="truncate inline-block max-w-[240px] align-middle">{u.file_name}</span>
+                            <span className="ms-2 text-xs">({formatBytes(u.file_size)})</span>
+                          </TableCell>
+                          <TableCell className="text-muted-foreground">
+                            {formatDate(u.archived_at, locale)}
+                          </TableCell>
+                          <TableCell className="text-end">
+                            <div className="flex justify-end gap-1">
+                              <Button asChild variant="ghost" size="sm" title={t("download")}>
+                                <a
+                                  href={`/api/archives/uploads?id=${u.id}`}
+                                  target="_blank"
+                                  rel="noopener"
+                                >
+                                  <Download className="h-4 w-4" />
+                                </a>
+                              </Button>
+                              <Button
+                                variant="ghost"
+                                size="sm"
+                                className="text-destructive hover:text-destructive"
+                                onClick={() => deleteUpload(u.id)}
+                                title={t("delete")}
+                              >
+                                <Trash2 className="h-4 w-4" />
+                              </Button>
+                            </div>
+                          </TableCell>
+                        </TableRow>
+                      );
+                    }
+
+                    const expanded = expandedBatches.has(entry.batchId);
+                    const tplIds = new Set(entry.items.map((i) => i.template_id ?? ""));
+                    const sharedTpl =
+                      tplIds.size === 1 && entry.items[0].template_id
+                        ? templatesById[entry.items[0].template_id]?.name ?? "—"
+                        : tplIds.size > 1
+                          ? "—"
+                          : "—";
+                    return (
+                      <Fragment key={entry.batchId}>
+                        <TableRow
+                          className="cursor-pointer hover:bg-muted/50"
+                          onClick={() => toggleBatch(entry.batchId)}
+                        >
+                          <TableCell>
+                            {expanded ? (
+                              <ChevronDown className="h-4 w-4 text-muted-foreground" />
+                            ) : (
+                              <ChevronRight className="h-4 w-4 text-muted-foreground rtl:rotate-180" />
+                            )}
+                          </TableCell>
+                          <TableCell className="font-medium">
+                            <span className="me-2">{entry.name}</span>
+                            <Badge variant="sand">
+                              {tUpload("fileCount", { count: entry.items.length })}
+                            </Badge>
+                          </TableCell>
+                          <TableCell className="text-muted-foreground">{sharedTpl}</TableCell>
+                          <TableCell className="text-muted-foreground">—</TableCell>
+                          <TableCell className="text-muted-foreground">
+                            {formatDate(entry.latest, locale)}
+                          </TableCell>
+                          <TableCell className="text-end">
+                            <Button
+                              variant="ghost"
+                              size="sm"
+                              className="text-destructive hover:text-destructive"
+                              onClick={(e) => {
+                                e.stopPropagation();
+                                deleteBatch(entry.batchId, entry.items.length);
+                              }}
+                              title={t("groupRow.deleteGroup")}
                             >
-                              <Download className="h-4 w-4" />
-                            </a>
-                          </Button>
-                          <Button
-                            variant="ghost"
-                            size="sm"
-                            className="text-destructive hover:text-destructive"
-                            onClick={() => deleteUpload(u.id)}
-                            title={t("delete")}
-                          >
-                            <Trash2 className="h-4 w-4" />
-                          </Button>
-                        </div>
-                      </TableCell>
-                    </TableRow>
-                  ))}
+                              <Trash2 className="h-4 w-4" />
+                            </Button>
+                          </TableCell>
+                        </TableRow>
+                        {expanded &&
+                          entry.items.map((u) => (
+                            <TableRow key={u.id} className="bg-muted/20">
+                              <TableCell></TableCell>
+                              <TableCell className="ps-8 text-sm text-muted-foreground">
+                                ↳
+                              </TableCell>
+                              <TableCell className="text-muted-foreground">
+                                {u.template_id ? templatesById[u.template_id]?.name ?? "—" : "—"}
+                              </TableCell>
+                              <TableCell className="text-muted-foreground">
+                                <span className="truncate inline-block max-w-[240px] align-middle">
+                                  {u.file_name}
+                                </span>
+                                <span className="ms-2 text-xs">
+                                  ({formatBytes(u.file_size)})
+                                </span>
+                              </TableCell>
+                              <TableCell className="text-muted-foreground">
+                                {formatDate(u.archived_at, locale)}
+                              </TableCell>
+                              <TableCell className="text-end">
+                                <div className="flex justify-end gap-1">
+                                  <Button
+                                    asChild
+                                    variant="ghost"
+                                    size="sm"
+                                    title={t("download")}
+                                  >
+                                    <a
+                                      href={`/api/archives/uploads?id=${u.id}`}
+                                      target="_blank"
+                                      rel="noopener"
+                                    >
+                                      <Download className="h-4 w-4" />
+                                    </a>
+                                  </Button>
+                                  <Button
+                                    variant="ghost"
+                                    size="sm"
+                                    className="text-destructive hover:text-destructive"
+                                    onClick={() => deleteUpload(u.id)}
+                                    title={t("delete")}
+                                  >
+                                    <Trash2 className="h-4 w-4" />
+                                  </Button>
+                                </div>
+                              </TableCell>
+                            </TableRow>
+                          ))}
+                      </Fragment>
+                    );
+                  })}
                 </TableBody>
               </Table>
             </Card>
@@ -420,6 +653,7 @@ export default function ArchivesPage() {
                   <SelectValue placeholder={tUpload("pickTemplate")} />
                 </SelectTrigger>
                 <SelectContent>
+                  <SelectItem value={NO_TEMPLATE}>{tUpload("noTemplate")}</SelectItem>
                   {templates.map((tpl) => (
                     <SelectItem key={tpl.id} value={tpl.id}>
                       {tpl.name}
@@ -430,26 +664,51 @@ export default function ArchivesPage() {
             </div>
 
             <div>
-              <Label>{tUpload("pickFile")}</Label>
-              <label className="flex flex-col items-center justify-center gap-2 border-2 border-dashed border-border rounded-md p-8 cursor-pointer hover:border-primary/50 transition-colors">
+              <Label>{tUpload("pickFiles")}</Label>
+              <label className="flex flex-col items-center justify-center gap-2 border-2 border-dashed border-border rounded-md p-6 cursor-pointer hover:border-primary/50 transition-colors">
                 <div className="flex h-12 w-12 items-center justify-center rounded-full bg-primary/10 text-primary">
                   <Upload className="h-5 w-5" />
                 </div>
                 <div className="text-xs text-muted-foreground">PDF, PNG, JPG, WEBP</div>
-                {pickedFile && (
-                  <div className="mt-2 flex items-center gap-2 text-sm text-foreground">
-                    <FileUp className="h-4 w-4 text-primary" />
-                    <span className="truncate max-w-[360px]">{pickedFile.name}</span>
-                    <span className="text-xs text-muted-foreground">({formatBytes(pickedFile.size)})</span>
-                  </div>
-                )}
+                <div className="text-xs text-primary">
+                  {pickedFiles.length === 0 ? tUpload("pickFiles") : tUpload("addMoreFiles")}
+                </div>
                 <input
                   type="file"
+                  multiple
                   accept=".pdf,.png,.jpg,.jpeg,.webp,application/pdf,image/png,image/jpeg,image/webp"
                   className="hidden"
-                  onChange={(e) => onPickFile(e.target.files?.[0] ?? null)}
+                  onChange={(e) => {
+                    onPickFiles(e.target.files);
+                    e.target.value = "";
+                  }}
                 />
               </label>
+              {pickedFiles.length > 0 && (
+                <ul className="mt-3 space-y-1 max-h-48 overflow-y-auto">
+                  {pickedFiles.map((f, idx) => (
+                    <li
+                      key={`${f.name}_${f.size}_${idx}`}
+                      className="flex items-center gap-2 text-sm rounded border border-border px-2 py-1"
+                    >
+                      <FileUp className="h-4 w-4 text-primary shrink-0" />
+                      <span className="truncate flex-1">{f.name}</span>
+                      <span className="text-xs text-muted-foreground shrink-0">
+                        {formatBytes(f.size)}
+                      </span>
+                      <button
+                        type="button"
+                        onClick={() => removePickedFile(idx)}
+                        disabled={submitting}
+                        className="text-muted-foreground hover:text-destructive disabled:opacity-50"
+                        aria-label={tUpload("removeFile")}
+                      >
+                        <X className="h-4 w-4" />
+                      </button>
+                    </li>
+                  ))}
+                </ul>
+              )}
             </div>
 
             <div>
@@ -473,17 +732,25 @@ export default function ArchivesPage() {
             </Button>
             <Button
               onClick={submitUpload}
-              disabled={submitting || !pickedFile || !pickedTemplate}
+              disabled={submitting || pickedFiles.length === 0}
             >
               {submitting ? (
                 <>
                   <Loader2 className="h-4 w-4 animate-spin" />
-                  {tUpload("extracting")}
+                  {progress.total > 1
+                    ? tUpload("uploadingProgress", { done: progress.done, total: progress.total })
+                    : pickedTemplate !== NO_TEMPLATE
+                      ? tUpload("extracting")
+                      : tUpload("submitNoExtract")}
                 </>
               ) : (
                 <>
                   <Upload className="h-4 w-4" />
-                  {tUpload("submit")}
+                  {pickedFiles.length > 1
+                    ? tUpload("submitMulti")
+                    : pickedTemplate !== NO_TEMPLATE
+                      ? tUpload("submit")
+                      : tUpload("submitNoExtract")}
                 </>
               )}
             </Button>
