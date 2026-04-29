@@ -35,6 +35,7 @@ interface RoleOption {
   id: string;
   name: string;
   is_system: boolean;
+  is_admin: boolean;
 }
 
 export default function NewEmployeePage() {
@@ -55,14 +56,13 @@ export default function NewEmployeePage() {
     full_name: z.string().min(2, t("errors.required")),
     email: z.string().email(t("errors.invalidEmail")),
     password: z.string().min(8, t("errors.passwordTooShort")),
-    role: z.literal("employe"),
     is_active: z.boolean(),
   });
   type FormValues = z.infer<typeof schema>;
 
   const form = useForm<FormValues>({
     resolver: zodResolver(schema),
-    defaultValues: { full_name: "", email: "", password: "", role: "employe", is_active: true },
+    defaultValues: { full_name: "", email: "", password: "", is_active: true },
   });
 
   useEffect(() => {
@@ -72,8 +72,8 @@ export default function NewEmployeePage() {
       if (data.ok) {
         const list = (data.roles ?? []) as RoleOption[];
         setRoles(list);
-        const firstNonSystem = list.find((r) => !r.is_system);
-        if (firstNonSystem) setSelectedRoleId(firstNonSystem.id);
+        const firstAssignable = list.find((r) => !r.is_admin);
+        if (firstAssignable) setSelectedRoleId(firstAssignable.id);
       } else {
         setRoles([]);
       }
@@ -81,7 +81,7 @@ export default function NewEmployeePage() {
     load();
   }, []);
 
-  if (profile && profile.role !== "admin") {
+  if (profile && !profile.is_admin) {
     return (
       <EmptyState icon={ShieldAlert} title={tEmployees("adminOnly")} description={t("errors.forbidden")} />
     );
@@ -146,7 +146,7 @@ export default function NewEmployeePage() {
     }
   };
 
-  const assignableRoles = (roles ?? []).filter((r) => !r.is_system);
+  const assignableRoles = (roles ?? []).filter((r) => !r.is_admin);
 
   return (
     <div className="space-y-8 animate-fade-in max-w-3xl mx-auto">

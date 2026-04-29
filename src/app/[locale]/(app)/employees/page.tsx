@@ -13,42 +13,45 @@ import { Switch } from "@/components/ui/switch";
 import { EmptyState } from "@/components/empty-states/empty";
 import { createClient } from "@/lib/supabase/client";
 import { useAuth } from "@/context/auth-context";
-import { roleLabel } from "@/lib/roles";
 import { formatDate } from "@/lib/utils";
 import type { AppUser } from "@/lib/supabase/types";
+
+type EmployeeRow = AppUser & { roles: { name: string; is_admin: boolean } | null };
 
 export default function EmployeesPage() {
   const t = useTranslations("employees");
   const tRoles = useTranslations("employees.roles");
   const locale = useLocale() as "fr" | "ar";
   const { profile } = useAuth();
-  const [rows, setRows] = useState<AppUser[] | null>(null);
+  const [rows, setRows] = useState<EmployeeRow[] | null>(null);
+
+  const loadRows = async () => {
+    const { data } = await createClient()
+      .from("users")
+      .select("*, roles(name, is_admin)")
+      .order("created_at", { ascending: false });
+    setRows((data as EmployeeRow[] | null) ?? []);
+  };
 
   useEffect(() => {
-    const load = async () => {
-      const { data } = await createClient().from("users").select("*").order("created_at", { ascending: false });
-      setRows((data as AppUser[]) ?? []);
-    };
-    load();
+    loadRows();
   }, []);
 
-  if (profile && profile.role !== "admin") {
+  if (profile && !profile.is_admin) {
     return (
       <EmptyState icon={ShieldAlert} title={t("adminOnly")} description="Cette section est réservée aux administrateurs du cabinet." />
     );
   }
 
-  const toggleActive = async (row: AppUser) => {
-    const s = createClient();
+  const toggleActive = async (row: EmployeeRow) => {
     const next = !row.is_active;
-    const { error } = await s.from("users").update({ is_active: next }).eq("id", row.id);
+    const { error } = await createClient().from("users").update({ is_active: next }).eq("id", row.id);
     if (error) {
       toast.error(error.message);
       return;
     }
     toast.success(next ? t("active") : t("inactive"));
-    const { data } = await s.from("users").select("*").order("created_at", { ascending: false });
-    setRows((data as AppUser[]) ?? []);
+    await loadRows();
   };
 
   return (
@@ -110,8 +113,8 @@ export default function EmployeesPage() {
                     <div className="text-xs text-muted-foreground">{r.phone ?? ""}</div>
                   </TableCell>
                   <TableCell>
-                    <Badge variant={r.role === "admin" ? "forest" : "sand"}>
-                      {roleLabel(r.role, locale)}
+                    <Badge variant={r.roles?.is_admin ? "forest" : "sand"}>
+                      {r.roles?.name ?? "—"}
                     </Badge>
                   </TableCell>
                   <TableCell>

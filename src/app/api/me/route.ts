@@ -15,7 +15,7 @@ export async function GET() {
   const admin = createAdminClient();
   const { data: row, error } = await admin
     .from("users")
-    .select("*")
+    .select("*, roles(name, is_admin)")
     .eq("user_id", user.id)
     .maybeSingle();
 
@@ -30,5 +30,21 @@ export async function GET() {
     );
   }
 
-  return NextResponse.json({ ok: true, user: row as AppUser });
+  const linked = (row as { roles?: { name: string; is_admin: boolean } | null }).roles ?? null;
+  const me: AppUser = {
+    id: row.id,
+    user_id: row.user_id,
+    full_name: row.full_name,
+    phone: row.phone,
+    email: row.email,
+    avatar_url: row.avatar_url,
+    last_login_at: row.last_login_at,
+    role_id: row.role_id,
+    role_name: linked?.name ?? null,
+    is_admin: linked?.is_admin ?? false,
+    is_active: row.is_active,
+    created_at: row.created_at,
+  };
+
+  return NextResponse.json({ ok: true, user: me });
 }

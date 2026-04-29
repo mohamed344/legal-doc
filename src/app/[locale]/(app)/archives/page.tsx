@@ -123,10 +123,10 @@ export default function ArchivesPage() {
   };
 
   useEffect(() => {
-    if (profile?.role === "admin") {
+    if (profile?.is_admin) {
       load();
     }
-  }, [profile?.role]);
+  }, [profile?.is_admin]);
 
   const templatesById = useMemo(
     () => Object.fromEntries(templates.map((tpl) => [tpl.id, tpl])),
@@ -165,7 +165,7 @@ export default function ArchivesPage() {
     return entries;
   }, [uploads]);
 
-  if (profile && profile.role !== "admin") {
+  if (profile && !profile.is_admin) {
     return (
       <EmptyState icon={ShieldAlert} title={tEmployees("adminOnly")} description={t("adminOnly")} />
     );

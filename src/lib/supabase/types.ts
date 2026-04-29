@@ -1,5 +1,3 @@
-export type Role = "admin" | "employe";
-
 export type DocumentStatus = "brouillon" | "valide" | "facture";
 export type InvoiceStatus = "brouillon" | "envoyee" | "payee";
 export type VariableType = "text" | "date" | "number" | "select" | "checkbox";
@@ -12,8 +10,9 @@ export interface AppUser {
   email: string | null;
   avatar_url: string | null;
   last_login_at: string | null;
-  role: Role;
-  role_id: string | null;
+  role_id: string;
+  role_name: string | null;
+  is_admin: boolean;
   is_active: boolean;
   created_at: string;
 }
@@ -22,6 +21,7 @@ export interface AppRole {
   id: string;
   name: string;
   is_system: boolean;
+  is_admin: boolean;
   created_at: string;
 }
 

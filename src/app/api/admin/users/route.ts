@@ -6,7 +6,6 @@ interface CreateUserBody {
   full_name: string;
   email: string;
   password: string;
-  role: "employe";
   is_active: boolean;
   role_id?: string | null;
 }
@@ -22,11 +21,12 @@ export async function POST(request: Request) {
 
   const { data: callerProfile } = await supabase
     .from("users")
-    .select("role")
+    .select("id, roles(is_admin)")
     .eq("user_id", user.id)
     .single();
 
-  if (!callerProfile || callerProfile.role !== "admin") {
+  const callerRole = (callerProfile as { roles?: { is_admin: boolean } | null } | null)?.roles ?? null;
+  if (!callerProfile || !callerRole?.is_admin) {
     return NextResponse.json({ ok: false, error: "forbidden" }, { status: 403 });
   }
 
@@ -37,11 +37,8 @@ export async function POST(request: Request) {
     return NextResponse.json({ ok: false, error: "invalid_json" }, { status: 400 });
   }
 
-  if (!body.email || !body.password || !body.full_name || !body.role) {
+  if (!body.email || !body.password || !body.full_name) {
     return NextResponse.json({ ok: false, error: "missing_fields" }, { status: 400 });
-  }
-  if (body.role !== "employe") {
-    return NextResponse.json({ ok: false, error: "invalid_role" }, { status: 400 });
   }
   if (body.password.length < 8) {
     return NextResponse.json({ ok: false, error: "weak_password" }, { status: 400 });
@@ -53,11 +50,15 @@ export async function POST(request: Request) {
   if (body.role_id) {
     const { data: roleRow } = await admin
       .from("roles")
-      .select("id")
+      .select("id, is_admin")
       .eq("id", body.role_id)
       .single();
     if (!roleRow) {
       return NextResponse.json({ ok: false, error: "invalid_role_id" }, { status: 400 });
+    }
+    if (roleRow.is_admin) {
+      // The form is for non-admin employees; refuse to silently mint another admin.
+      return NextResponse.json({ ok: false, error: "cannot_assign_admin_role" }, { status: 400 });
     }
     resolvedRoleId = roleRow.id;
   }
@@ -77,16 +78,18 @@ export async function POST(request: Request) {
 
   const newUserId = created.user.id;
 
-  // The handle_new_user trigger inserts a users row. Update it to reflect the admin's choices.
+  // handle_new_user() seeds the row with role_id = Employé. Update with the
+  // admin's choices (and override role_id only when one was explicitly picked).
+  const updatePayload: Record<string, unknown> = {
+    is_active: body.is_active,
+    full_name: body.full_name,
+    email: body.email,
+  };
+  if (resolvedRoleId) updatePayload.role_id = resolvedRoleId;
+
   const { data: updatedProfile, error: updateErr } = await admin
     .from("users")
-    .update({
-      role: body.role,
-      is_active: body.is_active,
-      full_name: body.full_name,
-      email: body.email,
-      role_id: resolvedRoleId,
-    })
+    .update(updatePayload)
     .eq("user_id", newUserId)
     .select("id")
     .single();

@@ -22,14 +22,15 @@ async function requireAdmin() {
 
   const { data: profile } = await supabase
     .from("users")
-    .select("id, role")
+    .select("id, roles(is_admin)")
     .eq("user_id", user.id)
     .single();
 
-  if (!profile || profile.role !== "admin") {
+  const linked = (profile as { roles?: { is_admin: boolean } | null } | null)?.roles ?? null;
+  if (!profile || !linked?.is_admin) {
     return { error: "forbidden" as const, status: 403 };
   }
-  return { profile };
+  return { profile: { id: (profile as { id: string }).id } };
 }
 
 function isValidGrant(g: unknown): g is PermissionGrant {
@@ -54,7 +55,7 @@ export async function GET(_req: Request, ctx: { params: Promise<{ id: string }> 
 
   const { data: role, error: roleErr } = await admin
     .from("roles")
-    .select("id, name, is_system, created_at")
+    .select("id, name, is_system, is_admin, created_at")
     .eq("id", id)
     .single();
   if (roleErr || !role) {
@@ -88,13 +89,13 @@ export async function PATCH(request: Request, ctx: { params: Promise<{ id: strin
 
   const { data: existing } = await admin
     .from("roles")
-    .select("id, is_system")
+    .select("id, is_system, is_admin")
     .eq("id", id)
     .single();
   if (!existing) {
     return NextResponse.json({ ok: false, error: "not_found" }, { status: 404 });
   }
-  if (existing.is_system) {
+  if (existing.is_system || existing.is_admin) {
     return NextResponse.json({ ok: false, error: "system_role_immutable" }, { status: 403 });
   }
 
@@ -151,13 +152,13 @@ export async function DELETE(_req: Request, ctx: { params: Promise<{ id: string 
 
   const { data: existing } = await admin
     .from("roles")
-    .select("id, is_system")
+    .select("id, is_system, is_admin")
     .eq("id", id)
     .single();
   if (!existing) {
     return NextResponse.json({ ok: false, error: "not_found" }, { status: 404 });
   }
-  if (existing.is_system) {
+  if (existing.is_system || existing.is_admin) {
     return NextResponse.json({ ok: false, error: "system_role_immutable" }, { status: 403 });
   }
 

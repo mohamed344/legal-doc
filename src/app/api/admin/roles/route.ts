@@ -22,14 +22,15 @@ async function requireAdmin() {
 
   const { data: profile } = await supabase
     .from("users")
-    .select("id, role")
+    .select("id, roles(is_admin)")
     .eq("user_id", user.id)
     .single();
 
-  if (!profile || profile.role !== "admin") {
+  const linked = (profile as { roles?: { is_admin: boolean } | null } | null)?.roles ?? null;
+  if (!profile || !linked?.is_admin) {
     return { error: "forbidden" as const, status: 403 };
   }
-  return { profile };
+  return { profile: { id: (profile as { id: string }).id } };
 }
 
 function isValidGrant(g: unknown): g is PermissionGrant {
@@ -53,7 +54,8 @@ export async function GET() {
 
   const { data: roles, error: rolesErr } = await admin
     .from("roles")
-    .select("id, name, is_system, created_at")
+    .select("id, name, is_system, is_admin, created_at")
+    .order("is_admin", { ascending: false })
     .order("is_system", { ascending: false })
     .order("name", { ascending: true });
   if (rolesErr) {
@@ -115,8 +117,8 @@ export async function POST(request: Request) {
 
   const { data: role, error: insertErr } = await admin
     .from("roles")
-    .insert({ name, is_system: false, created_by: auth.profile.id })
-    .select("id, name, is_system, created_at")
+    .insert({ name, is_system: false, is_admin: false, created_by: auth.profile.id })
+    .select("id, name, is_system, is_admin, created_at")
     .single();
 
   if (insertErr || !role) {

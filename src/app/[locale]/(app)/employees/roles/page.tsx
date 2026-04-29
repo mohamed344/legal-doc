@@ -68,7 +68,7 @@ export default function RolesPage() {
     refresh();
   }, []);
 
-  if (profile && profile.role !== "admin") {
+  if (profile && !profile.is_admin) {
     return (
       <EmptyState
         icon={ShieldAlert}

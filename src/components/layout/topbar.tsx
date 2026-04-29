@@ -101,7 +101,7 @@ export function Topbar() {
                       {profile?.full_name ?? (profile === null ? "…" : "Utilisateur")}
                     </div>
                     <div className="text-xs text-muted-foreground truncate">
-                      {profile ? roleLabel(profile.role, locale) : ""}
+                      {profile ? roleLabel(profile.role_name) : ""}
                     </div>
                   </div>
                 </button>
