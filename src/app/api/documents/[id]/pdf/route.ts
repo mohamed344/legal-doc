@@ -5,6 +5,7 @@ import { fillTemplate } from "@/lib/render-document";
 import type { Document, Template, TemplateVariable } from "@/lib/supabase/types";
 
 export const runtime = "nodejs";
+export const maxDuration = 30;
 
 export async function GET(_req: Request, { params }: { params: Promise<{ id: string }> }) {
   const { id } = await params;
@@ -39,7 +40,14 @@ export async function GET(_req: Request, { params }: { params: Promise<{ id: str
     doc.filled_data
   );
 
-  const pdf = await renderHtmlToPdf(filled, { title: doc.name });
+  let pdf: Uint8Array;
+  try {
+    pdf = await renderHtmlToPdf(filled, { title: doc.name });
+  } catch (err) {
+    console.error("[pdf]", err);
+    const message = err instanceof Error ? err.message : "render_failed";
+    return NextResponse.json({ ok: false, error: "render_failed", message }, { status: 500 });
+  }
 
   const safeName = sanitize(doc.name);
   const asciiFallback = toAscii(safeName);

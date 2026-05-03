@@ -1,4 +1,6 @@
 import puppeteer, { Browser } from "puppeteer";
+import { getPdfFontFaceCss } from "./fonts";
+import { detectDir } from "@/lib/text/direction";
 
 let browserPromise: Promise<Browser> | null = null;
 
@@ -22,34 +24,52 @@ async function getBrowser(): Promise<Browser> {
   }
 }
 
+async function recycleBrowser() {
+  const p = browserPromise;
+  browserPromise = null;
+  if (p) {
+    const b = await p.catch(() => null);
+    await b?.close().catch(() => {});
+  }
+}
+
 export interface RenderOptions {
   title?: string;
-  rtl?: boolean;
+  rtl?: boolean | "auto";
   fontFamily?: string;
 }
 
 export async function renderHtmlToPdf(
   bodyHtml: string,
-  { title = "Document", rtl = true, fontFamily = "'Noto Naskh Arabic', 'Amiri', Georgia, serif" }: RenderOptions = {}
+  { title = "Document", rtl = "auto", fontFamily }: RenderOptions = {},
 ): Promise<Uint8Array> {
+  const isRtl = rtl === "auto" ? detectDir(bodyHtml) === "rtl" : rtl;
+  const dir = isRtl ? "rtl" : "ltr";
+  const lang = isRtl ? "ar" : "fr";
+  const resolvedFont =
+    fontFamily ?? (isRtl ? "'Noto Naskh Arabic', 'Amiri', Georgia, serif" : "Georgia, 'Times New Roman', serif");
+
   const browser = await getBrowser();
-  const page = await browser.newPage();
+  let page;
   try {
-    const dir = rtl ? "rtl" : "ltr";
-    const lang = rtl ? "ar" : "fr";
+    page = await browser.newPage();
+  } catch (err) {
+    await recycleBrowser();
+    throw err;
+  }
+
+  try {
     const html = `<!doctype html>
 <html dir="${dir}" lang="${lang}">
 <head>
   <meta charset="utf-8" />
   <title>${escapeHtml(title)}</title>
-  <link rel="preconnect" href="https://fonts.googleapis.com" />
-  <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin />
-  <link href="https://fonts.googleapis.com/css2?family=Amiri:wght@400;700&family=Noto+Naskh+Arabic:wght@400;500;700&display=swap" rel="stylesheet" />
   <style>
+    ${getPdfFontFaceCss()}
     @page { size: A4; margin: 18mm 16mm; }
     html, body { background: #fff; color: #1a1a1a; }
     body {
-      font-family: ${fontFamily};
+      font-family: ${resolvedFont};
       font-size: 12pt;
       line-height: 1.7;
       margin: 0;
@@ -61,14 +81,49 @@ export async function renderHtmlToPdf(
     table, th, td { border: 1px solid #444; padding: 4px 6px; }
     .legal-document { max-width: 100%; }
     img { max-width: 100%; height: auto; }
+    [style*="text-align: center"] { text-align: center; }
+    [style*="text-align: right"]  { text-align: right; }
+    [style*="text-align: left"]   { text-align: left; }
+    [style*="text-align: justify"] { text-align: justify; }
+    mark { background-color: #fff59d; padding: 0 2px; }
+    sub, sup { font-size: 0.75em; line-height: 0; }
+    u { text-decoration: underline; }
+    a { color: #1a4f8a; text-decoration: underline; }
   </style>
 </head>
 <body>${bodyHtml}</body>
 </html>`;
 
-    await page.setContent(html, { waitUntil: "networkidle0" });
+    await page.setContent(html, { waitUntil: "domcontentloaded", timeout: 5000 });
+
+    await Promise.race([
+      page.evaluate(
+        () => (document as unknown as { fonts?: { ready: Promise<unknown> } }).fonts?.ready ?? Promise.resolve(),
+      ),
+      new Promise((r) => setTimeout(r, 2500)),
+    ]);
+
+    await Promise.race([
+      page.evaluate(() =>
+        Promise.all(
+          Array.from(document.images).map((i) =>
+            i.complete
+              ? null
+              : new Promise<void>((res) => {
+                  i.onload = () => res();
+                  i.onerror = () => res();
+                }),
+          ),
+        ),
+      ),
+      new Promise((r) => setTimeout(r, 3000)),
+    ]);
+
     const pdf = await page.pdf({ format: "A4", printBackground: true });
     return pdf;
+  } catch (err) {
+    await recycleBrowser();
+    throw err;
   } finally {
     await page.close().catch(() => {});
   }
@@ -84,9 +139,5 @@ function escapeHtml(s: string): string {
 }
 
 export async function shutdownBrowser() {
-  if (browserPromise) {
-    const b = await browserPromise.catch(() => null);
-    browserPromise = null;
-    await b?.close().catch(() => {});
-  }
+  await recycleBrowser();
 }

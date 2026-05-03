@@ -22,6 +22,7 @@ import { createClient } from "@/lib/supabase/client";
 import { fillTemplate } from "@/lib/render-document";
 import type { Document, Template, TemplateVariable } from "@/lib/supabase/types";
 import { formatDate } from "@/lib/utils";
+import { detectDir } from "@/lib/text/direction";
 
 function toStringMap(src: Record<string, unknown>): Record<string, string> {
   const out: Record<string, string> = {};
@@ -81,21 +82,17 @@ export default function DocumentViewPage() {
     return fillTemplate(tpl.body_html ?? null, vars, source);
   }, [doc, tpl, vars, editing, values]);
 
-  const isRtl = useMemo(
-    () =>
-      /[؀-ۿݐ-ݿࢠ-ࣿﭐ-﷿ﹰ-﻿]/.test(
-        renderedHtml,
-      ),
-    [renderedHtml],
-  );
+  const isRtl = useMemo(() => detectDir(renderedHtml, locale) === "rtl", [renderedHtml, locale]);
 
   const print = () => {
     if (!tpl || !doc) return;
     const w = window.open("", "_blank");
     if (!w) return;
+    const printDir = detectDir(renderedHtml, locale);
+    const printLang = printDir === "rtl" ? "ar" : "fr";
     w.document.write(`
-      <html><head><title>${doc.name}</title>
-      <style>body{font-family:Georgia,serif;padding:48px;max-width:800px;margin:0 auto;color:#2A2A2A;line-height:1.6}h1,h2,h3{font-family:serif}</style>
+      <html dir="${printDir}" lang="${printLang}"><head><title>${doc.name}</title>
+      <style>body{font-family:${printDir === "rtl" ? "'Traditional Arabic','Geeza Pro',Georgia,serif" : "Georgia,'Times New Roman',serif"};padding:48px;max-width:800px;margin:0 auto;color:#2A2A2A;line-height:1.6}h1,h2,h3{font-weight:700}</style>
       </head><body>${renderedHtml}</body></html>
     `);
     w.document.close();
