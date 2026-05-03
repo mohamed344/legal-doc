@@ -14,6 +14,7 @@ import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@
 import { createClient } from "@/lib/supabase/client";
 import { fillTemplate } from "@/lib/render-document";
 import type { Template, TemplateVariable, Client } from "@/lib/supabase/types";
+import { detectDir } from "@/lib/text/direction";
 
 export default function NewDocumentPage() {
   const t = useTranslations("documents");
@@ -95,14 +96,18 @@ export default function NewDocumentPage() {
     if (!tpl) return;
     const w = window.open("", "_blank");
     if (!w) return;
+    const printDir = detectDir(filledHtml, locale);
+    const printLang = printDir === "rtl" ? "ar" : "fr";
+    const fontStack = printDir === "rtl"
+      ? "'Traditional Arabic','Geeza Pro',Georgia,serif"
+      : "Georgia,'Times New Roman',serif";
     w.document.write(`
-      <html>
+      <html dir="${printDir}" lang="${printLang}">
         <head>
           <title>${docName || tpl.name}</title>
-          <link href="https://fonts.googleapis.com/css2?family=Fraunces:opsz,wght@9..144,400;9..144,600&display=swap" rel="stylesheet">
           <style>
-            body { font-family: Georgia, serif; padding: 48px; max-width: 800px; margin: 0 auto; color: #2A2A2A; line-height: 1.6; }
-            h1, h2, h3 { font-family: 'Fraunces', serif; }
+            body { font-family: ${fontStack}; padding: 48px; max-width: 800px; margin: 0 auto; color: #2A2A2A; line-height: 1.6; }
+            h1, h2, h3 { font-weight: 700; }
           </style>
         </head>
         <body>${filledHtml}</body>
@@ -158,7 +163,11 @@ export default function NewDocumentPage() {
         </Card>
       ) : showPreview ? (
         <Card>
-          <CardContent className="prose prose-stone max-w-none p-8" dangerouslySetInnerHTML={{ __html: filledHtml }} />
+          <CardContent
+            dir={detectDir(filledHtml, locale)}
+            className="prose prose-stone max-w-none p-8"
+            dangerouslySetInnerHTML={{ __html: filledHtml }}
+          />
         </Card>
       ) : (
         <div className="grid gap-6 lg:grid-cols-[1fr_1fr]">
@@ -232,7 +241,11 @@ export default function NewDocumentPage() {
             <CardHeader>
               <CardTitle>{t("preview")}</CardTitle>
             </CardHeader>
-            <CardContent className="prose prose-stone max-w-none" dangerouslySetInnerHTML={{ __html: filledHtml }} />
+            <CardContent
+              dir={detectDir(filledHtml, locale)}
+              className="prose prose-stone max-w-none"
+              dangerouslySetInnerHTML={{ __html: filledHtml }}
+            />
           </Card>
         </div>
       )}

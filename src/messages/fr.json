@@ -100,6 +100,7 @@
       "category": "Catégorie",
       "defaultPrice": "Tarif par défaut (DA)",
       "content": "Contenu",
+      "placeholder": "Rédigez votre modèle… utilisez la syntaxe {{nom_variable}} pour les champs dynamiques.",
       "variables": "Variables",
       "addVariable": "Ajouter une variable",
       "variableKey": "Clé (ex: nom_client)",
@@ -170,7 +171,9 @@
       "searchName": "Rechercher par nom",
       "model": "Modèle",
       "allModels": "Tous les modèles",
-      "noResults": "Aucun résultat"
+      "noResults": "Aucun résultat",
+      "clientFilter": "Client : {name}",
+      "clearClient": "Retirer le filtre client"
     },
     "columns": {
       "name": "Nom",
@@ -204,7 +207,8 @@
     "documents": "Documents associés",
     "searchDocuments": "Rechercher un document…",
     "noUnassignedDocs": "Aucun document disponible.",
-    "actions": "Actions"
+    "actions": "Actions",
+    "viewDocuments": "Voir les documents"
   },
   "invoices": {
     "title": "Factures",
@@ -246,6 +250,7 @@
     "deactivate": "Désactiver",
     "reactivate": "Réactiver",
     "adminOnly": "Section réservée à l'administrateur",
+    "roleUpdated": "Rôle mis à jour",
     "newUser": {
       "title": "Nouvel utilisateur",
       "subtitle": "Créez un compte pour un collaborateur et définissez ses accès",

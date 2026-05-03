@@ -100,6 +100,7 @@
       "category": "الفئة",
       "defaultPrice": "السعر الافتراضي (دج)",
       "content": "المحتوى",
+      "placeholder": "اكتب نموذجك… استخدم الصيغة {{اسم_المتغير}} للحقول الديناميكية.",
       "variables": "المتغيرات",
       "addVariable": "إضافة متغير",
       "variableKey": "المفتاح (مثل: nom_client)",
@@ -170,7 +171,9 @@
       "searchName": "البحث بالاسم",
       "model": "النموذج",
       "allModels": "كل النماذج",
-      "noResults": "لا توجد نتائج"
+      "noResults": "لا توجد نتائج",
+      "clientFilter": "العميل: {name}",
+      "clearClient": "إزالة فلتر العميل"
     },
     "columns": {
       "name": "الاسم",
@@ -204,7 +207,8 @@
     "documents": "المستندات المرتبطة",
     "searchDocuments": "البحث عن مستند…",
     "noUnassignedDocs": "لا توجد مستندات متاحة.",
-    "actions": "إجراءات"
+    "actions": "إجراءات",
+    "viewDocuments": "عرض المستندات"
   },
   "invoices": {
     "title": "الفواتير",
@@ -246,6 +250,7 @@
     "deactivate": "تعطيل",
     "reactivate": "إعادة تفعيل",
     "adminOnly": "قسم خاص بالمسؤول",
+    "roleUpdated": "تم تحديث الدور",
     "newUser": {
       "title": "مستخدم جديد",
       "subtitle": "أنشئ حسابًا لعضو في الفريق وحدّد صلاحياته",
