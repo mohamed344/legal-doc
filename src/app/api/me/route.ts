@@ -7,7 +7,11 @@ export async function GET() {
   const supabase = await createClient();
   const {
     data: { user },
+    error: getUserErr,
   } = await supabase.auth.getUser();
+  if (getUserErr) {
+    console.error("[/api/me] auth.getUser error:", getUserErr.message);
+  }
   if (!user) {
     return NextResponse.json({ ok: false, error: "unauthenticated" }, { status: 401 });
   }
@@ -15,7 +19,7 @@ export async function GET() {
   const admin = createAdminClient();
   const { data: row, error } = await admin
     .from("users")
-    .select("*, roles(name, is_admin)")
+    .select("*, roles!users_role_id_fkey(name, is_admin)")
     .eq("user_id", user.id)
     .maybeSingle();
 

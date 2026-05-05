@@ -13,6 +13,7 @@ import {
   Sparkles,
   Loader2,
   FileUp,
+  Variable as VariableIcon,
 } from "lucide-react";
 import { toast } from "sonner";
 import { Button } from "@/components/ui/button";
@@ -29,6 +30,7 @@ import {
 } from "@/components/ui/select";
 import { Switch } from "@/components/ui/switch";
 import { Badge } from "@/components/ui/badge";
+import { Sheet, SheetContent, SheetHeader, SheetTitle, SheetTrigger } from "@/components/ui/sheet";
 import { TemplateEditor } from "@/components/templates/template-editor";
 import { createClient } from "@/lib/supabase/client";
 import { slug } from "@/lib/utils";
@@ -197,20 +199,100 @@ export default function NewTemplatePage() {
     }
 
     toast.success(t("saved"));
-    router.push(`/${locale}/templates/${tpl.id}/edit`);
+    router.push(`/${locale}/documents`);
   };
+
+  const variablesAddButton = (
+    <Button size="sm" variant="outline" onClick={addVariable}>
+      <Plus className="h-4 w-4" />
+      {t("addVariable")}
+    </Button>
+  );
+
+  const variablesList = (
+    <>
+      {variables.length === 0 && (
+        <p className="text-sm text-muted-foreground text-center py-6">
+          Ajoutez une variable pour créer un champ dynamique.
+        </p>
+      )}
+      {variables.map((v) => (
+        <div key={v.tempId} className="rounded-md border border-border/60 p-3 space-y-2">
+          <div className="flex items-center gap-2">
+            <GripVertical className="h-4 w-4 text-muted-foreground shrink-0" />
+            <Badge variant="forest" className="font-mono truncate max-w-full">{`{{${slug(v.key)}}}`}</Badge>
+            <Button size="icon" variant="ghost" onClick={() => removeVariable(v.tempId)} className="ms-auto h-7 w-7 shrink-0">
+              <Trash2 className="h-3.5 w-3.5" />
+            </Button>
+          </div>
+          <div>
+            <Label className="text-[10px]">{t("variableKey")}</Label>
+            <Input value={v.key} onChange={(e) => updateVariable(v.tempId, { key: e.target.value })} className="h-9 mt-1" />
+          </div>
+          <div>
+            <Label className="text-[10px]">{t("variableLabel")}</Label>
+            <Input value={v.label} onChange={(e) => updateVariable(v.tempId, { label: e.target.value })} className="h-9 mt-1" />
+          </div>
+          <div>
+            <Label className="text-[10px]">{t("variableType")}</Label>
+            <Select value={v.type} onValueChange={(val) => updateVariable(v.tempId, { type: val as VariableType })}>
+              <SelectTrigger className="h-9 mt-1">
+                <SelectValue />
+              </SelectTrigger>
+              <SelectContent>
+                <SelectItem value="text">{tTypes("text")}</SelectItem>
+                <SelectItem value="date">{tTypes("date")}</SelectItem>
+                <SelectItem value="number">{tTypes("number")}</SelectItem>
+                <SelectItem value="select">{tTypes("select")}</SelectItem>
+                <SelectItem value="checkbox">{tTypes("checkbox")}</SelectItem>
+              </SelectContent>
+            </Select>
+          </div>
+          {v.type === "select" && (
+            <div>
+              <Label className="text-[10px]">Options (séparées par virgules)</Label>
+              <Input value={v.options} onChange={(e) => updateVariable(v.tempId, { options: e.target.value })} className="h-9 mt-1" />
+            </div>
+          )}
+          <div className="flex items-center justify-between pt-1">
+            <Label className="text-[10px]">{t("variableRequired")}</Label>
+            <Switch checked={v.required} onCheckedChange={(c) => updateVariable(v.tempId, { required: c })} />
+          </div>
+        </div>
+      ))}
+    </>
+  );
 
   return (
     <div className="space-y-8 animate-fade-in">
-      <div className="flex items-center gap-3">
+      <div className="flex flex-wrap items-center gap-3">
         <Button variant="ghost" size="icon" onClick={() => router.back()}>
           <ArrowLeft className="h-4 w-4" />
         </Button>
-        <h1 className="font-display text-display-2">Nouveau modèle</h1>
-        <Button onClick={save} disabled={saving} className="ms-auto">
-          <Save className="h-4 w-4" />
-          {t("save")}
-        </Button>
+        <h1 className="font-display text-display-2 min-w-0 truncate">Nouveau modèle</h1>
+        <div className="ms-auto flex items-center gap-2">
+          <Sheet>
+            <SheetTrigger asChild>
+              <Button variant="outline" size="sm" className="lg:hidden">
+                <VariableIcon className="h-4 w-4" />
+                {t("variables")}
+              </Button>
+            </SheetTrigger>
+            <SheetContent side={locale === "ar" ? "left" : "right"} className="w-full sm:max-w-md flex flex-col">
+              <SheetHeader className="flex-row items-center justify-between gap-2">
+                <SheetTitle>{t("variables")}</SheetTitle>
+                {variablesAddButton}
+              </SheetHeader>
+              <div className="flex-1 overflow-y-auto p-6 space-y-3">
+                {variablesList}
+              </div>
+            </SheetContent>
+          </Sheet>
+          <Button onClick={save} disabled={saving}>
+            <Save className="h-4 w-4" />
+            {t("save")}
+          </Button>
+        </div>
       </div>
 
       <div className="grid gap-6 lg:grid-cols-[1fr_360px]">
@@ -277,7 +359,7 @@ export default function NewTemplatePage() {
                 <Label htmlFor="tpl-desc">{t("description")}</Label>
                 <Textarea id="tpl-desc" value={description} onChange={(e) => setDescription(e.target.value)} />
               </div>
-              <div className="grid grid-cols-2 gap-4">
+              <div className="grid grid-cols-1 sm:grid-cols-2 gap-4">
                 <div>
                   <Label htmlFor="tpl-cat">{t("category")}</Label>
                   <Input id="tpl-cat" value={category} onChange={(e) => setCategory(e.target.value)} placeholder="Contrat, Procuration…" />
@@ -300,65 +382,14 @@ export default function NewTemplatePage() {
           </Card>
         </div>
 
-        <div>
+        <div className="hidden lg:block">
           <Card className="sticky top-20">
             <CardHeader className="flex-row items-center justify-between space-y-0">
               <CardTitle>{t("variables")}</CardTitle>
-              <Button size="sm" variant="outline" onClick={addVariable}>
-                <Plus className="h-4 w-4" />
-                {t("addVariable")}
-              </Button>
+              {variablesAddButton}
             </CardHeader>
             <CardContent className="space-y-3 max-h-[70vh] overflow-y-auto">
-              {variables.length === 0 && (
-                <p className="text-sm text-muted-foreground text-center py-6">
-                  Ajoutez une variable pour créer un champ dynamique.
-                </p>
-              )}
-              {variables.map((v) => (
-                <div key={v.tempId} className="rounded-md border border-border/60 p-3 space-y-2">
-                  <div className="flex items-center gap-2">
-                    <GripVertical className="h-4 w-4 text-muted-foreground" />
-                    <Badge variant="forest" className="font-mono">{`{{${slug(v.key)}}}`}</Badge>
-                    <Button size="icon" variant="ghost" onClick={() => removeVariable(v.tempId)} className="ms-auto h-7 w-7">
-                      <Trash2 className="h-3.5 w-3.5" />
-                    </Button>
-                  </div>
-                  <div>
-                    <Label className="text-[10px]">{t("variableKey")}</Label>
-                    <Input value={v.key} onChange={(e) => updateVariable(v.tempId, { key: e.target.value })} className="h-9 mt-1" />
-                  </div>
-                  <div>
-                    <Label className="text-[10px]">{t("variableLabel")}</Label>
-                    <Input value={v.label} onChange={(e) => updateVariable(v.tempId, { label: e.target.value })} className="h-9 mt-1" />
-                  </div>
-                  <div>
-                    <Label className="text-[10px]">{t("variableType")}</Label>
-                    <Select value={v.type} onValueChange={(val) => updateVariable(v.tempId, { type: val as VariableType })}>
-                      <SelectTrigger className="h-9 mt-1">
-                        <SelectValue />
-                      </SelectTrigger>
-                      <SelectContent>
-                        <SelectItem value="text">{tTypes("text")}</SelectItem>
-                        <SelectItem value="date">{tTypes("date")}</SelectItem>
-                        <SelectItem value="number">{tTypes("number")}</SelectItem>
-                        <SelectItem value="select">{tTypes("select")}</SelectItem>
-                        <SelectItem value="checkbox">{tTypes("checkbox")}</SelectItem>
-                      </SelectContent>
-                    </Select>
-                  </div>
-                  {v.type === "select" && (
-                    <div>
-                      <Label className="text-[10px]">Options (séparées par virgules)</Label>
-                      <Input value={v.options} onChange={(e) => updateVariable(v.tempId, { options: e.target.value })} className="h-9 mt-1" />
-                    </div>
-                  )}
-                  <div className="flex items-center justify-between pt-1">
-                    <Label className="text-[10px]">{t("variableRequired")}</Label>
-                    <Switch checked={v.required} onCheckedChange={(c) => updateVariable(v.tempId, { required: c })} />
-                  </div>
-                </div>
-              ))}
+              {variablesList}
             </CardContent>
           </Card>
         </div>

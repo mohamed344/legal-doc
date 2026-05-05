@@ -92,12 +92,12 @@ export default function NewInvoicePage() {
 
   return (
     <div className="space-y-8 animate-fade-in">
-      <div className="flex items-center gap-3">
+      <div className="flex flex-wrap items-center gap-3">
         <Button variant="ghost" size="icon" onClick={() => router.back()}>
           <ArrowLeft className="h-4 w-4" />
         </Button>
-        <h1 className="font-display text-display-2">{t("new")}</h1>
-        <div className="ms-auto flex gap-2">
+        <h1 className="font-display text-display-2 min-w-0 truncate">{t("new")}</h1>
+        <div className="ms-auto flex flex-wrap gap-2">
           <Button variant="outline" onClick={() => save("brouillon")} disabled={saving}>
             <Save className="h-4 w-4" />
             Brouillon

@@ -37,12 +37,12 @@ export default function BulkResultsPage() {
 
   return (
     <div className="space-y-6 animate-fade-in">
-      <header className="flex items-center gap-3">
+      <header className="flex flex-wrap items-center gap-3">
         <Button variant="ghost" size="icon" onClick={() => router.push(`/${locale}/documents`)}>
           <ArrowLeft className="h-4 w-4" />
         </Button>
-        <div className="flex-1">
-          <h1 className="font-display text-display-2">Documents générés</h1>
+        <div className="min-w-0 flex-1">
+          <h1 className="font-display text-display-2 truncate">Documents générés</h1>
           <p className="text-muted-foreground mt-1">
             {ids.length} document{ids.length > 1 ? "s" : ""} créé{ids.length > 1 ? "s" : ""} et enregistré{ids.length > 1 ? "s" : ""}.
           </p>

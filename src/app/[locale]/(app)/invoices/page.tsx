@@ -78,6 +78,7 @@ export default function InvoicesPage() {
         <EmptyState icon={Receipt} title="Aucune facture" description="Créez votre première facture pour commencer à suivre vos encaissements." action={<Button asChild><Link href={`/${locale}/invoices/new`}><Plus className="h-4 w-4" />{t("new")}</Link></Button>} />
       ) : (
         <Card>
+          <div className="overflow-x-auto">
           <Table>
             <TableHeader>
               <TableRow>
@@ -117,6 +118,7 @@ export default function InvoicesPage() {
               ))}
             </TableBody>
           </Table>
+          </div>
         </Card>
       )}
     </div>

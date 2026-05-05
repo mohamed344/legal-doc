@@ -1,8 +1,9 @@
 "use client";
 
 import { useEffect, useState } from "react";
-import { useTranslations } from "next-intl";
-import { Plus, Users, UserRound, Mail, Phone, Pencil } from "lucide-react";
+import Link from "next/link";
+import { useLocale, useTranslations } from "next-intl";
+import { Plus, Users, UserRound, Mail, Phone, Pencil, FolderOpen } from "lucide-react";
 import { toast } from "sonner";
 import { Button } from "@/components/ui/button";
 import { Card } from "@/components/ui/card";
@@ -22,6 +23,7 @@ const EMPTY_FORM: FormState = { name: "", email: "", phone: "", address: "", not
 
 export default function ClientsPage() {
   const t = useTranslations("clients");
+  const locale = useLocale();
   const [rows, setRows] = useState<Client[] | null>(null);
   const [editing, setEditing] = useState<Client | null | undefined>(undefined);
   const [form, setForm] = useState<FormState>(EMPTY_FORM);
@@ -138,6 +140,7 @@ export default function ClientsPage() {
         <EmptyState icon={Users} title={t("empty")} action={<Button onClick={openCreate}><Plus className="h-4 w-4" />{t("add")}</Button>} />
       ) : (
         <Card>
+          <div className="overflow-x-auto">
           <Table>
             <TableHeader>
               <TableRow>
@@ -178,19 +181,33 @@ export default function ClientsPage() {
                     ) : "—"}
                   </TableCell>
                   <TableCell className="text-end">
-                    <Button
-                      variant="ghost"
-                      size="icon"
-                      onClick={() => openEdit(c)}
-                      aria-label={t("edit")}
-                    >
-                      <Pencil className="h-4 w-4" />
-                    </Button>
+                    <div className="inline-flex items-center gap-1">
+                      <Button
+                        variant="ghost"
+                        size="icon"
+                        asChild
+                        aria-label={t("viewDocuments")}
+                        title={t("viewDocuments")}
+                      >
+                        <Link href={`/${locale}/documents?client=${c.id}`}>
+                          <FolderOpen className="h-4 w-4" />
+                        </Link>
+                      </Button>
+                      <Button
+                        variant="ghost"
+                        size="icon"
+                        onClick={() => openEdit(c)}
+                        aria-label={t("edit")}
+                      >
+                        <Pencil className="h-4 w-4" />
+                      </Button>
+                    </div>
                   </TableCell>
                 </TableRow>
               ))}
             </TableBody>
           </Table>
+          </div>
         </Card>
       )}
 
@@ -204,7 +221,7 @@ export default function ClientsPage() {
               <Label>{t("name")} *</Label>
               <Input value={form.name} onChange={(e) => setForm({ ...form, name: e.target.value })} />
             </div>
-            <div className="grid grid-cols-2 gap-3">
+            <div className="grid grid-cols-1 sm:grid-cols-2 gap-3">
               <div>
                 <Label>{t("email")}</Label>
                 <Input type="email" value={form.email} onChange={(e) => setForm({ ...form, email: e.target.value })} />

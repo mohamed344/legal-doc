@@ -10,6 +10,13 @@ import { Card } from "@/components/ui/card";
 import { Table, TableBody, TableCell, TableHead, TableHeader, TableRow } from "@/components/ui/table";
 import { Badge } from "@/components/ui/badge";
 import { Switch } from "@/components/ui/switch";
+import {
+  Select,
+  SelectContent,
+  SelectItem,
+  SelectTrigger,
+  SelectValue,
+} from "@/components/ui/select";
 import { EmptyState } from "@/components/empty-states/empty";
 import { createClient } from "@/lib/supabase/client";
 import { useAuth } from "@/context/auth-context";
@@ -17,6 +24,7 @@ import { formatDate } from "@/lib/utils";
 import type { AppUser } from "@/lib/supabase/types";
 
 type EmployeeRow = AppUser & { roles: { name: string; is_admin: boolean } | null };
+type RoleOption = { id: string; name: string; is_admin: boolean };
 
 export default function EmployeesPage() {
   const t = useTranslations("employees");
@@ -24,17 +32,31 @@ export default function EmployeesPage() {
   const locale = useLocale() as "fr" | "ar";
   const { profile } = useAuth();
   const [rows, setRows] = useState<EmployeeRow[] | null>(null);
+  const [roleOptions, setRoleOptions] = useState<RoleOption[]>([]);
+  const [pendingRoleId, setPendingRoleId] = useState<string | null>(null);
 
   const loadRows = async () => {
-    const { data } = await createClient()
-      .from("users")
-      .select("*, roles(name, is_admin)")
-      .order("created_at", { ascending: false });
-    setRows((data as EmployeeRow[] | null) ?? []);
+    const res = await fetch("/api/admin/users", { cache: "no-store" });
+    const data = await res.json().catch(() => null);
+    if (!res.ok || !data?.ok) {
+      console.error("[employees] /api/admin/users failed", res.status, data);
+      toast.error(`${res.status}: ${data?.error ?? "fetch_failed"}`);
+      setRows([]);
+      return;
+    }
+    setRows((data.users as EmployeeRow[] | null) ?? []);
+  };
+
+  const loadRoles = async () => {
+    const res = await fetch("/api/admin/roles", { cache: "no-store" });
+    const data = await res.json().catch(() => null);
+    if (!res.ok || !data?.ok) return;
+    setRoleOptions(((data.roles as RoleOption[]) ?? []).filter((r) => !r.is_admin));
   };
 
   useEffect(() => {
     loadRows();
+    loadRoles();
   }, []);
 
   if (profile && !profile.is_admin) {
@@ -51,6 +73,24 @@ export default function EmployeesPage() {
       return;
     }
     toast.success(next ? t("active") : t("inactive"));
+    await loadRows();
+  };
+
+  const changeRole = async (row: EmployeeRow, nextRoleId: string) => {
+    if (nextRoleId === row.role_id) return;
+    setPendingRoleId(row.id);
+    const res = await fetch(`/api/admin/users/${row.id}`, {
+      method: "PATCH",
+      headers: { "Content-Type": "application/json" },
+      body: JSON.stringify({ role_id: nextRoleId }),
+    });
+    const data = await res.json().catch(() => null);
+    setPendingRoleId(null);
+    if (!res.ok || !data?.ok) {
+      toast.error(`${res.status}: ${data?.error ?? "update_failed"}`);
+      return;
+    }
+    toast.success(t("roleUpdated"));
     await loadRows();
   };
 
@@ -96,6 +136,7 @@ export default function EmployeesPage() {
         />
       ) : (
         <Card>
+          <div className="overflow-x-auto">
           <Table>
             <TableHeader>
               <TableRow>
@@ -113,9 +154,28 @@ export default function EmployeesPage() {
                     <div className="text-xs text-muted-foreground">{r.phone ?? ""}</div>
                   </TableCell>
                   <TableCell>
-                    <Badge variant={r.roles?.is_admin ? "forest" : "sand"}>
-                      {r.roles?.name ?? "—"}
-                    </Badge>
+                    {r.roles?.is_admin || r.id === profile?.id ? (
+                      <Badge variant={r.roles?.is_admin ? "forest" : "sand"}>
+                        {r.roles?.name ?? "—"}
+                      </Badge>
+                    ) : (
+                      <Select
+                        value={r.role_id}
+                        disabled={pendingRoleId === r.id || roleOptions.length === 0}
+                        onValueChange={(nextId) => changeRole(r, nextId)}
+                      >
+                        <SelectTrigger className="h-8 w-[180px]">
+                          <SelectValue />
+                        </SelectTrigger>
+                        <SelectContent>
+                          {roleOptions.map((opt) => (
+                            <SelectItem key={opt.id} value={opt.id}>
+                              {opt.name}
+                            </SelectItem>
+                          ))}
+                        </SelectContent>
+                      </Select>
+                    )}
                   </TableCell>
                   <TableCell>
                     <div className="flex items-center gap-2">
@@ -130,6 +190,7 @@ export default function EmployeesPage() {
               ))}
             </TableBody>
           </Table>
+          </div>
         </Card>
       )}
     </div>

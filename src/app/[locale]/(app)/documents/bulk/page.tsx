@@ -6,6 +6,7 @@ import { useLocale } from "next-intl";
 import {
   ArrowLeft,
   ArrowRight,
+  Eye,
   FileUp,
   Loader2,
   Plus,
@@ -28,6 +29,7 @@ import {
   TableHeader,
   TableRow,
 } from "@/components/ui/table";
+import { Sheet, SheetContent, SheetHeader, SheetTitle, SheetTrigger } from "@/components/ui/sheet";
 import { createClient } from "@/lib/supabase/client";
 import { fillTemplate } from "@/lib/render-document";
 import type { Template, TemplateVariable } from "@/lib/supabase/types";
@@ -177,11 +179,11 @@ export default function BulkDocumentsPage() {
 
   return (
     <div className="space-y-8 animate-fade-in">
-      <header className="flex items-center gap-3">
-        <Button variant="ghost" size="icon" onClick={() => router.back()}>
+      <header className="flex items-start gap-3">
+        <Button variant="ghost" size="icon" className="shrink-0 mt-1" onClick={() => router.back()}>
           <ArrowLeft className="h-4 w-4" />
         </Button>
-        <div>
+        <div className="min-w-0">
           <div className="text-xs uppercase tracking-[0.22em] text-terracotta-deep mb-1">
             Bulk depuis scan
           </div>
@@ -285,6 +287,25 @@ export default function BulkDocumentsPage() {
 
       {step === "review" && tpl && (
         <div className="grid gap-6 lg:grid-cols-[minmax(0,1fr)_360px]">
+          <div className="lg:hidden">
+            <Sheet>
+              <SheetTrigger asChild>
+                <Button variant="outline" size="sm">
+                  <Eye className="h-4 w-4" />
+                  Aperçu (ligne 1)
+                </Button>
+              </SheetTrigger>
+              <SheetContent side={locale === "ar" ? "left" : "right"} className="w-full sm:max-w-md flex flex-col">
+                <SheetHeader>
+                  <SheetTitle>Aperçu (ligne 1)</SheetTitle>
+                </SheetHeader>
+                <div
+                  className="prose prose-stone max-w-none text-xs flex-1 overflow-auto p-6"
+                  dangerouslySetInnerHTML={{ __html: previewHtml }}
+                />
+              </SheetContent>
+            </Sheet>
+          </div>
           <div className="space-y-6">
             {batchVars.length > 0 && (
               <Card>

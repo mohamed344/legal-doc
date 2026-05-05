@@ -1,6 +1,6 @@
 import { NextResponse } from "next/server";
-import { createClient } from "@/lib/supabase/server";
 import { createAdminClient } from "@/lib/supabase/admin";
+import { requireAdmin } from "@/lib/api/require-admin";
 
 interface CreateUserBody {
   full_name: string;
@@ -10,24 +10,31 @@ interface CreateUserBody {
   role_id?: string | null;
 }
 
-export async function POST(request: Request) {
-  const supabase = await createClient();
-  const {
-    data: { user },
-  } = await supabase.auth.getUser();
-  if (!user) {
-    return NextResponse.json({ ok: false, error: "unauthenticated" }, { status: 401 });
+export async function GET() {
+  const auth = await requireAdmin();
+  if ("error" in auth) {
+    return NextResponse.json({ ok: false, error: auth.error }, { status: auth.status });
   }
 
-  const { data: callerProfile } = await supabase
+  const admin = createAdminClient();
+  const { data, error } = await admin
     .from("users")
-    .select("id, roles(is_admin)")
-    .eq("user_id", user.id)
-    .single();
+    .select(
+      "id, user_id, full_name, phone, email, avatar_url, last_login_at, role_id, is_active, created_at, roles!users_role_id_fkey(name, is_admin)"
+    )
+    .order("created_at", { ascending: false });
 
-  const callerRole = (callerProfile as { roles?: { is_admin: boolean } | null } | null)?.roles ?? null;
-  if (!callerProfile || !callerRole?.is_admin) {
-    return NextResponse.json({ ok: false, error: "forbidden" }, { status: 403 });
+  if (error) {
+    return NextResponse.json({ ok: false, error: error.message }, { status: 500 });
+  }
+
+  return NextResponse.json({ ok: true, users: data ?? [] });
+}
+
+export async function POST(request: Request) {
+  const auth = await requireAdmin();
+  if ("error" in auth) {
+    return NextResponse.json({ ok: false, error: auth.error }, { status: auth.status });
   }
 
   let body: CreateUserBody;

@@ -3,7 +3,7 @@
 import { useEffect, useState } from "react";
 import { useParams, useRouter } from "next/navigation";
 import { useLocale, useTranslations } from "next-intl";
-import { ArrowLeft, Save, FileText } from "lucide-react";
+import { ArrowLeft, Save, FileText, Variable as VariableIcon } from "lucide-react";
 import { toast } from "sonner";
 import { Button } from "@/components/ui/button";
 import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
@@ -11,6 +11,7 @@ import { Input } from "@/components/ui/input";
 import { Label } from "@/components/ui/label";
 import { Textarea } from "@/components/ui/textarea";
 import { Badge } from "@/components/ui/badge";
+import { Sheet, SheetContent, SheetHeader, SheetTitle, SheetTrigger } from "@/components/ui/sheet";
 import { TemplateEditor } from "@/components/templates/template-editor";
 import { createClient } from "@/lib/supabase/client";
 import type { Template, TemplateVariable } from "@/lib/supabase/types";
@@ -64,23 +65,53 @@ export default function EditTemplatePage() {
     return <div className="text-muted-foreground">Chargement…</div>;
   }
 
+  const variablesList = vars.length === 0 ? (
+    <p className="text-sm text-muted-foreground">Aucune variable.</p>
+  ) : (
+    vars.map((v) => (
+      <div key={v.id} className="flex items-center gap-2 rounded-md border border-border/60 p-2">
+        <Badge variant="forest" className="font-mono text-[10px] truncate max-w-full">{`{{${v.key}}}`}</Badge>
+        <div className="flex-1 text-sm truncate">{v.label}</div>
+        <Badge variant="sand" className="text-[10px] shrink-0">{v.type}</Badge>
+      </div>
+    ))
+  );
+
   return (
     <div className="space-y-8 animate-fade-in">
-      <div className="flex items-center gap-3">
+      <div className="flex flex-wrap items-center gap-3">
         <Button variant="ghost" size="icon" onClick={() => router.push(`/${locale}/templates`)}>
           <ArrowLeft className="h-4 w-4" />
         </Button>
-        <h1 className="font-display text-display-2">{name || "Modèle"}</h1>
-        <Button onClick={save} disabled={saving} className="ms-auto">
-          <Save className="h-4 w-4" />
-          {t("save")}
-        </Button>
-        <Button asChild variant="outline">
-          <a href={`/${locale}/documents/new?template=${id}`}>
-            <FileText className="h-4 w-4" />
-            Remplir
-          </a>
-        </Button>
+        <h1 className="font-display text-display-2 min-w-0 truncate">{name || "Modèle"}</h1>
+        <div className="ms-auto flex flex-wrap items-center gap-2">
+          <Sheet>
+            <SheetTrigger asChild>
+              <Button variant="outline" size="sm" className="lg:hidden">
+                <VariableIcon className="h-4 w-4" />
+                {t("variables")}
+              </Button>
+            </SheetTrigger>
+            <SheetContent side={locale === "ar" ? "left" : "right"} className="w-full sm:max-w-md flex flex-col">
+              <SheetHeader>
+                <SheetTitle>{t("variables")}</SheetTitle>
+              </SheetHeader>
+              <div className="flex-1 overflow-y-auto p-6 space-y-2">
+                {variablesList}
+              </div>
+            </SheetContent>
+          </Sheet>
+          <Button onClick={save} disabled={saving}>
+            <Save className="h-4 w-4" />
+            {t("save")}
+          </Button>
+          <Button asChild variant="outline">
+            <a href={`/${locale}/documents/new?template=${id}`}>
+              <FileText className="h-4 w-4" />
+              Remplir
+            </a>
+          </Button>
+        </div>
       </div>
 
       <div className="grid gap-6 lg:grid-cols-[1fr_320px]">
@@ -110,22 +141,12 @@ export default function EditTemplatePage() {
           </Card>
         </div>
 
-        <Card className="sticky top-20 h-fit">
+        <Card className="hidden lg:block sticky top-20 h-fit">
           <CardHeader>
             <CardTitle>{t("variables")}</CardTitle>
           </CardHeader>
           <CardContent className="space-y-2">
-            {vars.length === 0 ? (
-              <p className="text-sm text-muted-foreground">Aucune variable.</p>
-            ) : (
-              vars.map((v) => (
-                <div key={v.id} className="flex items-center gap-2 rounded-md border border-border/60 p-2">
-                  <Badge variant="forest" className="font-mono text-[10px]">{`{{${v.key}}}`}</Badge>
-                  <div className="flex-1 text-sm">{v.label}</div>
-                  <Badge variant="sand" className="text-[10px]">{v.type}</Badge>
-                </div>
-              ))
-            )}
+            {variablesList}
           </CardContent>
         </Card>
       </div>

@@ -46,8 +46,14 @@ export default async function LocaleLayout({
   const messages = await getMessages();
   const dir = locale === "ar" ? "rtl" : "ltr";
 
+  // Use getSession (cookie-only, no refresh) instead of getUser. Calling
+  // getUser in a Server Component triggers a token-refresh whose new
+  // cookies cannot be persisted (Server Components are read-only for
+  // cookies), which then burns the refresh token and causes /api/me to
+  // 401 on the next request. Middleware is responsible for refreshing.
   const supabase = await createClient();
-  const { data: { user } } = await supabase.auth.getUser();
+  const { data: { session } } = await supabase.auth.getSession();
+  const user = session?.user ?? null;
 
   return (
     <html

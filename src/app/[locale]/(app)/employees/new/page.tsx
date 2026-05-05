@@ -150,11 +150,11 @@ export default function NewEmployeePage() {
 
   return (
     <div className="space-y-8 animate-fade-in max-w-3xl mx-auto">
-      <div className="flex items-center gap-3">
-        <Button variant="ghost" size="icon" onClick={() => router.back()}>
+      <div className="flex items-start gap-3">
+        <Button variant="ghost" size="icon" className="shrink-0 mt-1" onClick={() => router.back()}>
           <ArrowLeft className="h-4 w-4" />
         </Button>
-        <div>
+        <div className="min-w-0">
           <div className="text-xs uppercase tracking-[0.22em] text-terracotta-deep mb-1">{t("section")}</div>
           <h1 className="font-display text-display-2">{t("title")}</h1>
           <p className="text-muted-foreground mt-1">{t("subtitle")}</p>

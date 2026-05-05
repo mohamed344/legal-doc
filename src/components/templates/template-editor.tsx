@@ -79,8 +79,10 @@ const HIGHLIGHT_SWATCHES = [
   "#80deea", "#a5d6a7", "#e6ee9c", "#fff9c4", "#ffccbc", "#d1c4e9",
 ];
 
+const FONT_FAMILY_DEFAULT = "__default__";
+
 const FONT_FAMILIES = [
-  { label: "Default", value: "" },
+  { label: "Default", value: FONT_FAMILY_DEFAULT },
   { label: "Sans", value: "system-ui, -apple-system, sans-serif" },
   { label: "Serif", value: "Georgia, 'Times New Roman', serif" },
   { label: "Monospace", value: "ui-monospace, 'Courier New', monospace" },
@@ -262,19 +264,21 @@ function EditorToolbar({
 
       {/* Group 2: font family + size */}
       <Select
-        value={currentFontFamily}
+        value={currentFontFamily || FONT_FAMILY_DEFAULT}
         onValueChange={(v) => {
-          if (!v) editor.chain().focus().unsetFontFamily().run();
+          if (!v || v === FONT_FAMILY_DEFAULT) editor.chain().focus().unsetFontFamily().run();
           else editor.chain().focus().setFontFamily(v).run();
         }}
       >
-        <SelectTrigger className="h-8 w-[140px] text-xs">
+        <SelectTrigger className="h-8 w-[110px] md:w-[140px] text-xs">
           <SelectValue placeholder="Police" />
         </SelectTrigger>
         <SelectContent>
           {FONT_FAMILIES.map((f) => (
             <SelectItem key={f.label} value={f.value}>
-              <span style={{ fontFamily: f.value || undefined }}>{f.label}</span>
+              <span style={{ fontFamily: f.value === FONT_FAMILY_DEFAULT ? undefined : f.value }}>
+                {f.label}
+              </span>
             </SelectItem>
           ))}
         </SelectContent>
@@ -287,7 +291,7 @@ function EditorToolbar({
           else editor.chain().focus().setFontSize(v).run();
         }}
       >
-        <SelectTrigger className="h-8 w-[80px] text-xs">
+        <SelectTrigger className="h-8 w-[72px] md:w-[80px] text-xs">
           <SelectValue placeholder="Taille" />
         </SelectTrigger>
         <SelectContent>

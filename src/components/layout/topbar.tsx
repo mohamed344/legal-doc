@@ -26,7 +26,7 @@ export function Topbar() {
   const locale = useLocale() as "fr" | "ar";
   const router = useRouter();
   const pathname = usePathname();
-  const { profile, signOut } = useAuth();
+  const { user, profile, signOut } = useAuth();
   const { setOpen } = useCommandPalette();
   const [sheetOpen, setSheetOpen] = useState(false);
 
@@ -35,8 +35,12 @@ export function Topbar() {
     router.push(`/${next}${stripped}`);
   };
 
-  const initials = (profile?.full_name ?? "")
-    .split(" ")
+  // If /api/me hasn't resolved yet (or failed), fall back to the auth user's
+  // email so the header isn't blank for an authenticated user.
+  const displayName = profile?.full_name?.trim() || user?.email || (profile === null ? "…" : "Utilisateur");
+
+  const initials = (profile?.full_name?.trim() || user?.email || "")
+    .split(/[\s@.]+/)
     .map((s) => s[0])
     .filter(Boolean)
     .slice(0, 2)
@@ -60,16 +64,16 @@ export function Topbar() {
 
           <button
             onClick={() => setOpen(true)}
-            className="flex-1 max-w-xl flex items-center gap-2 rounded-md border border-border/60 bg-card/60 px-3 py-2 text-start text-sm text-muted-foreground hover:bg-card transition-colors cursor-pointer"
+            className="flex min-w-0 flex-1 md:max-w-xl items-center gap-2 rounded-md border border-border/60 bg-card/60 px-3 py-2 text-start text-sm text-muted-foreground hover:bg-card transition-colors cursor-pointer"
           >
-            <Search className="h-4 w-4" />
-            <span className="flex-1 truncate">{t("searchPlaceholder")}</span>
+            <Search className="h-4 w-4 shrink-0" />
+            <span className="min-w-0 flex-1 truncate">{t("searchPlaceholder")}</span>
             <kbd className="hidden md:inline-flex items-center gap-1 rounded border border-border/60 px-1.5 py-0.5 text-[10px] font-mono text-muted-foreground">
               ⌘K
             </kbd>
           </button>
 
-          <div className="ms-auto flex items-center gap-2">
+          <div className="ms-auto flex shrink-0 items-center gap-1 sm:gap-2">
             <DropdownMenu>
               <DropdownMenuTrigger asChild>
                 <Button variant="ghost" size="icon" aria-label="Langue">
@@ -98,7 +102,7 @@ export function Topbar() {
                   </Avatar>
                   <div className="hidden sm:block text-start leading-tight max-w-[160px]">
                     <div className="text-sm font-medium truncate">
-                      {profile?.full_name ?? (profile === null ? "…" : "Utilisateur")}
+                      {displayName}
                     </div>
                     <div className="text-xs text-muted-foreground truncate">
                       {profile ? roleLabel(profile.role_name) : ""}
@@ -107,7 +111,7 @@ export function Topbar() {
                 </button>
               </DropdownMenuTrigger>
               <DropdownMenuContent align="end" className="w-56">
-                <DropdownMenuLabel>{profile?.full_name ?? "—"}</DropdownMenuLabel>
+                <DropdownMenuLabel>{displayName}</DropdownMenuLabel>
                 <DropdownMenuSeparator />
                 <DropdownMenuItem onClick={() => router.push(`/${locale}/settings`)}>
                   <UserRound className="h-4 w-4" />

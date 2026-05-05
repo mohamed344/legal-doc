@@ -373,6 +373,7 @@ export default function ArchivesPage() {
             <EmptyState icon={Archive} title={t("emptyDocs")} description="" />
           ) : (
             <Card>
+              <div className="overflow-x-auto">
               <Table>
                 <TableHeader>
                   <TableRow>
@@ -412,6 +413,7 @@ export default function ArchivesPage() {
                   ))}
                 </TableBody>
               </Table>
+              </div>
             </Card>
           )}
         </TabsContent>
@@ -423,6 +425,7 @@ export default function ArchivesPage() {
             <EmptyState icon={Archive} title={t("emptyInvoices")} description="" />
           ) : (
             <Card>
+              <div className="overflow-x-auto">
               <Table>
                 <TableHeader>
                   <TableRow>
@@ -466,6 +469,7 @@ export default function ArchivesPage() {
                   ))}
                 </TableBody>
               </Table>
+              </div>
             </Card>
           )}
         </TabsContent>
@@ -477,6 +481,7 @@ export default function ArchivesPage() {
             <EmptyState icon={FileUp} title={t("emptyUploads")} description="" />
           ) : (
             <Card>
+              <div className="overflow-x-auto">
               <Table>
                 <TableHeader>
                   <TableRow>
@@ -634,6 +639,7 @@ export default function ArchivesPage() {
                   })}
                 </TableBody>
               </Table>
+              </div>
             </Card>
           )}
         </TabsContent>

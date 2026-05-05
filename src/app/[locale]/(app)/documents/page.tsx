@@ -2,9 +2,9 @@
 
 import { useEffect, useMemo, useState } from "react";
 import Link from "next/link";
-import { useRouter } from "next/navigation";
+import { useRouter, useSearchParams } from "next/navigation";
 import { useLocale, useTranslations } from "next-intl";
-import { FolderOpen, FileText, Archive, Wand2, Pencil, Download, Eye, Loader2 } from "lucide-react";
+import { FolderOpen, FileText, Archive, Wand2, Pencil, Download, Eye, Loader2, X } from "lucide-react";
 import { toast } from "sonner";
 import { Button } from "@/components/ui/button";
 import { Card } from "@/components/ui/card";
@@ -98,9 +98,12 @@ export default function DocumentsPage() {
   const tArchives = useTranslations("archives");
   const locale = useLocale();
   const router = useRouter();
+  const searchParams = useSearchParams();
+  const clientId = searchParams.get("client");
   const [docs, setDocs] = useState<Document[] | null>(null);
   const [tplById, setTplById] = useState<Record<string, Template>>({});
   const [varsByTpl, setVarsByTpl] = useState<Record<string, TemplateVariable[]>>({});
+  const [clientName, setClientName] = useState<string | null>(null);
   const [nameQuery, setNameQuery] = useState("");
   const [modelFilter, setModelFilter] = useState<string>("all");
   const [archivingId, setArchivingId] = useState<string | null>(null);
@@ -108,13 +111,26 @@ export default function DocumentsPage() {
 
   const load = async () => {
     const supabase = createClient();
-    const { data: docsData } = await supabase
+    let q = supabase
       .from("documents")
       .select("*")
       .eq("is_archived", false)
       .order("created_at", { ascending: false });
+    if (clientId) q = q.eq("client_id", clientId);
+    const { data: docsData } = await q;
     const docRows = (docsData as Document[]) ?? [];
     setDocs(docRows);
+
+    if (clientId) {
+      const { data: clientRow } = await supabase
+        .from("clients")
+        .select("name")
+        .eq("id", clientId)
+        .maybeSingle();
+      setClientName((clientRow as { name: string } | null)?.name ?? null);
+    } else {
+      setClientName(null);
+    }
 
     const tplIds = Array.from(new Set(docRows.map((d) => d.template_id)));
     if (tplIds.length) {
@@ -142,7 +158,8 @@ export default function DocumentsPage() {
 
   useEffect(() => {
     load();
-  }, []);
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [clientId]);
 
   const filteredDocs = useMemo(() => {
     if (!docs) return null;
@@ -207,6 +224,18 @@ export default function DocumentsPage() {
           <p className="text-muted-foreground mt-1">{t("subtitle")}</p>
         </div>
         <div className="flex flex-wrap gap-2 items-center">
+          {clientId && (
+            <Badge variant="sand" className="gap-1.5 py-1.5">
+              <span>{t("filters.clientFilter", { name: clientName ?? "…" })}</span>
+              <Link
+                href={`/${locale}/documents`}
+                aria-label={t("filters.clearClient")}
+                className="inline-flex items-center justify-center rounded-full hover:bg-background/40"
+              >
+                <X className="h-3 w-3" />
+              </Link>
+            </Badge>
+          )}
           {hasDocs && (
             <>
               <Input

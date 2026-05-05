@@ -53,13 +53,13 @@ export default function InvoiceDetailPage() {
 
   return (
     <div className="space-y-8 animate-fade-in">
-      <div className="flex items-center gap-3">
+      <div className="flex flex-wrap items-center gap-3">
         <Button variant="ghost" size="icon" onClick={() => router.back()}>
           <ArrowLeft className="h-4 w-4" />
         </Button>
-        <div className="flex-1">
-          <h1 className="font-display text-display-2">Facture {inv.number}</h1>
-          <div className="flex items-center gap-3 mt-1">
+        <div className="min-w-0 flex-1">
+          <h1 className="font-display text-display-2 truncate">Facture {inv.number}</h1>
+          <div className="flex flex-wrap items-center gap-3 mt-1">
             <Badge variant="sand">{tStatus(inv.status)}</Badge>
             <span className="text-sm text-muted-foreground">{formatDate(inv.issued_at, locale)}</span>
           </div>
@@ -101,26 +101,28 @@ export default function InvoiceDetailPage() {
             )}
           </div>
 
-          <table className="w-full text-sm">
-            <thead>
-              <tr className="border-b border-border/60">
-                <th className="text-start py-2 font-medium text-muted-foreground">{t("description")}</th>
-                <th className="text-end py-2 font-medium text-muted-foreground">{t("quantity")}</th>
-                <th className="text-end py-2 font-medium text-muted-foreground">{t("unitPrice")}</th>
-                <th className="text-end py-2 font-medium text-muted-foreground">{t("amount")}</th>
-              </tr>
-            </thead>
-            <tbody>
-              {lines.map((l) => (
-                <tr key={l.id} className="border-b border-border/40">
-                  <td className="py-3">{l.description}</td>
-                  <td className="py-3 text-end numerals-display">{l.qty}</td>
-                  <td className="py-3 text-end numerals-display">{formatDA(Number(l.unit_price))}</td>
-                  <td className="py-3 text-end numerals-display">{formatDA(Number(l.amount))}</td>
+          <div className="overflow-x-auto">
+            <table className="w-full text-sm min-w-[560px]">
+              <thead>
+                <tr className="border-b border-border/60">
+                  <th className="text-start py-2 font-medium text-muted-foreground">{t("description")}</th>
+                  <th className="text-end py-2 font-medium text-muted-foreground">{t("quantity")}</th>
+                  <th className="text-end py-2 font-medium text-muted-foreground">{t("unitPrice")}</th>
+                  <th className="text-end py-2 font-medium text-muted-foreground">{t("amount")}</th>
                 </tr>
-              ))}
-            </tbody>
-          </table>
+              </thead>
+              <tbody>
+                {lines.map((l) => (
+                  <tr key={l.id} className="border-b border-border/40">
+                    <td className="py-3">{l.description}</td>
+                    <td className="py-3 text-end numerals-display">{l.qty}</td>
+                    <td className="py-3 text-end numerals-display">{formatDA(Number(l.unit_price))}</td>
+                    <td className="py-3 text-end numerals-display">{formatDA(Number(l.amount))}</td>
+                  </tr>
+                ))}
+              </tbody>
+            </table>
+          </div>
 
           <div className="flex justify-end">
             <div className="w-full max-w-xs space-y-2">
