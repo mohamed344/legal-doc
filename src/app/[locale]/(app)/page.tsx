@@ -3,7 +3,7 @@
 import { useEffect, useState } from "react";
 import Link from "next/link";
 import { useLocale, useTranslations } from "next-intl";
-import { FileText, FolderOpen, Receipt, Users, Sparkles, ArrowUpRight } from "lucide-react";
+import { FileText, FolderOpen, Receipt, Users, ArrowUpRight } from "lucide-react";
 import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
 import { Button } from "@/components/ui/button";
 import { Badge } from "@/components/ui/badge";
@@ -145,7 +145,6 @@ export default function DashboardPage() {
           </CardHeader>
           <CardContent className="space-y-2">
             <QuickAction href={`/${locale}/templates/new`} label={tActions("newTemplate")} icon={FileText} />
-            <QuickAction href={`/${locale}/templates/import-ai`} label={tActions("importAi")} icon={Sparkles} accent />
             <QuickAction href={`/${locale}/invoices/new`} label={tActions("newInvoice")} icon={Receipt} />
             <QuickAction href={`/${locale}/clients`} label={tActions("addClient")} icon={Users} />
           </CardContent>
