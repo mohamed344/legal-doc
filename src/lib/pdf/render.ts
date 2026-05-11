@@ -1,5 +1,6 @@
 import puppeteer, { Browser } from "puppeteer";
 import { getPdfFontFaceCss } from "./fonts";
+import { LETTERHEAD_HTML } from "./letterhead";
 import { detectDir } from "@/lib/text/direction";
 
 let browserPromise: Promise<Browser> | null = null;
@@ -89,9 +90,12 @@ export async function renderHtmlToPdf(
     sub, sup { font-size: 0.75em; line-height: 0; }
     u { text-decoration: underline; }
     a { color: #1a4f8a; text-decoration: underline; }
+    .letterhead { direction: rtl; text-align: right; margin: 0 0 12mm; padding-bottom: 6mm; border-bottom: 1px solid #888; }
+    .letterhead img { display: block; margin: 0 auto; max-height: 28mm; width: auto; }
+    .letterhead p { margin: 0.15em 0; }
   </style>
 </head>
-<body>${bodyHtml}</body>
+<body><div class="letterhead" dir="rtl" lang="ar">${LETTERHEAD_HTML}</div>${bodyHtml}</body>
 </html>`;
 
     await page.setContent(html, { waitUntil: "domcontentloaded", timeout: 5000 });

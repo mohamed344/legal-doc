@@ -32,6 +32,7 @@ import { Switch } from "@/components/ui/switch";
 import { Badge } from "@/components/ui/badge";
 import { Sheet, SheetContent, SheetHeader, SheetTitle, SheetTrigger } from "@/components/ui/sheet";
 import { TemplateEditor } from "@/components/templates/template-editor";
+import { Letterhead } from "@/components/letterhead";
 import { createClient } from "@/lib/supabase/client";
 import { slug } from "@/lib/utils";
 import type { VariableType } from "@/lib/supabase/types";
@@ -376,7 +377,8 @@ export default function NewTemplatePage() {
             <CardHeader>
               <CardTitle>{t("content")}</CardTitle>
             </CardHeader>
-            <CardContent>
+            <CardContent className="space-y-4">
+              <Letterhead />
               <TemplateEditor content={content} onChange={setContent} />
             </CardContent>
           </Card>

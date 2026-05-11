@@ -4,7 +4,7 @@ import { useEffect, useMemo, useState } from "react";
 import Link from "next/link";
 import { useRouter, useSearchParams } from "next/navigation";
 import { useLocale, useTranslations } from "next-intl";
-import { FolderOpen, FileText, Archive, Wand2, Pencil, Download, Eye, Loader2, X } from "lucide-react";
+import { FolderOpen, FileText, Archive, Wand2, Pencil, Download, Eye, Loader2, X, Trash2 } from "lucide-react";
 import { toast } from "sonner";
 import { Button } from "@/components/ui/button";
 import { Card } from "@/components/ui/card";
@@ -108,6 +108,7 @@ export default function DocumentsPage() {
   const [modelFilter, setModelFilter] = useState<string>("all");
   const [archivingId, setArchivingId] = useState<string | null>(null);
   const [downloadingId, setDownloadingId] = useState<string | null>(null);
+  const [deletingId, setDeletingId] = useState<string | null>(null);
 
   const load = async () => {
     const supabase = createClient();
@@ -189,6 +190,27 @@ export default function DocumentsPage() {
       return;
     }
     toast.success(tArchives("archive"));
+    await load();
+  };
+
+  const remove = async (id: string) => {
+    if (!window.confirm(tActions("confirmDelete"))) return;
+    setDeletingId(id);
+    const { data, error } = await createClient()
+      .from("documents")
+      .delete()
+      .eq("id", id)
+      .select("id");
+    setDeletingId(null);
+    if (error) {
+      toast.error(error.message);
+      return;
+    }
+    if (!data || data.length === 0) {
+      toast.error(tActions("deleteDenied"));
+      return;
+    }
+    toast.success(tActions("deleted"));
     await load();
   };
 
@@ -362,6 +384,20 @@ export default function DocumentsPage() {
                             <Loader2 className="h-4 w-4 animate-spin" />
                           ) : (
                             <Archive className="h-4 w-4" />
+                          )}
+                        </Button>
+                        <Button
+                          variant="ghost"
+                          size="sm"
+                          className="text-destructive hover:text-destructive hover:bg-destructive/10"
+                          title={tActions("delete")}
+                          disabled={deletingId === d.id}
+                          onClick={() => remove(d.id)}
+                        >
+                          {deletingId === d.id ? (
+                            <Loader2 className="h-4 w-4 animate-spin" />
+                          ) : (
+                            <Trash2 className="h-4 w-4" />
                           )}
                         </Button>
                       </div>

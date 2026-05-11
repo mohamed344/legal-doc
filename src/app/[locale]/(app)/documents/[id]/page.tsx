@@ -20,6 +20,7 @@ import {
 } from "@/components/ui/select";
 import { createClient } from "@/lib/supabase/client";
 import { fillTemplate } from "@/lib/render-document";
+import { Letterhead } from "@/components/letterhead";
 import type { Document, Template, TemplateVariable } from "@/lib/supabase/types";
 import { formatDate } from "@/lib/utils";
 import { detectDir } from "@/lib/text/direction";
@@ -241,8 +242,10 @@ export default function DocumentViewPage() {
           dir={isRtl ? "rtl" : "ltr"}
           lang={isRtl ? "ar" : undefined}
           className="prose prose-stone prose-lg max-w-none p-8 md:p-12 leading-relaxed"
-          dangerouslySetInnerHTML={{ __html: renderedHtml }}
-        />
+        >
+          <Letterhead className="not-prose mb-6" />
+          <div dangerouslySetInnerHTML={{ __html: renderedHtml }} />
+        </CardContent>
       </Card>
     </div>
   );

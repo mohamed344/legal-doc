@@ -189,7 +189,11 @@
       "save": "Enregistrer",
       "cancel": "Annuler",
       "saved": "Document mis à jour",
-      "downloadFailed": "Échec du téléchargement"
+      "downloadFailed": "Échec du téléchargement",
+      "delete": "Supprimer",
+      "confirmDelete": "Supprimer définitivement ce document ? Cette action est irréversible.",
+      "deleted": "Document supprimé",
+      "deleteDenied": "Suppression refusée par les permissions"
     }
   },
   "clients": {
