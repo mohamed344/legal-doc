@@ -20,6 +20,7 @@ import {
 } from "@/components/ui/select";
 import { createClient } from "@/lib/supabase/client";
 import { fillTemplate } from "@/lib/render-document";
+import { stripLeadingLetterhead } from "@/lib/pdf/strip-letterhead";
 import { Letterhead } from "@/components/letterhead";
 import type { Document, Template, TemplateVariable } from "@/lib/supabase/types";
 import { formatDate } from "@/lib/utils";
@@ -80,7 +81,7 @@ export default function DocumentViewPage() {
   const renderedHtml = useMemo(() => {
     if (!doc || !tpl) return "";
     const source = editing ? values : toStringMap(doc.filled_data ?? {});
-    return fillTemplate(tpl.body_html ?? null, vars, source);
+    return stripLeadingLetterhead(fillTemplate(tpl.body_html ?? null, vars, source));
   }, [doc, tpl, vars, editing, values]);
 
   const isRtl = useMemo(() => detectDir(renderedHtml, locale) === "rtl", [renderedHtml, locale]);

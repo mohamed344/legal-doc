@@ -1,24 +1,46 @@
 import puppeteer, { Browser } from "puppeteer";
 import { getPdfFontFaceCss } from "./fonts";
 import { LETTERHEAD_HTML } from "./letterhead";
+import { stripLeadingLetterhead } from "./strip-letterhead";
 import { detectDir } from "@/lib/text/direction";
+
+export { stripLeadingLetterhead };
 
 let browserPromise: Promise<Browser> | null = null;
 
-async function getBrowser(): Promise<Browser> {
-  if (!browserPromise) {
-    browserPromise = puppeteer.launch({
-      headless: true,
-      args: ["--no-sandbox", "--disable-setuid-sandbox"],
-    });
-  }
+async function launchBrowser(): Promise<Browser> {
+  return puppeteer.launch({
+    headless: true,
+    args: ["--no-sandbox", "--disable-setuid-sandbox"],
+  });
+}
+
+async function pingBrowser(b: Browser): Promise<boolean> {
+  if (!b.connected) return false;
   try {
-    const b = await browserPromise;
-    if (!b.connected) {
-      browserPromise = null;
-      return getBrowser();
+    await Promise.race([
+      b.version(),
+      new Promise((_, rej) => setTimeout(() => rej(new Error("ping_timeout")), 500)),
+    ]);
+    return true;
+  } catch {
+    return false;
+  }
+}
+
+async function getBrowser(): Promise<Browser> {
+  if (browserPromise) {
+    try {
+      const existing = await browserPromise;
+      if (await pingBrowser(existing)) return existing;
+    } catch {
+      // fall through to relaunch
     }
-    return b;
+    await recycleBrowser();
+  }
+  browserPromise = launchBrowser();
+  try {
+    return await browserPromise;
   } catch (err) {
     browserPromise = null;
     throw err;
@@ -40,23 +62,61 @@ export interface RenderOptions {
   fontFamily?: string;
 }
 
+function buildHeaderTemplate(): string {
+  // Puppeteer renders headerTemplate at zoom 100% with no inherited styles,
+  // so inline everything. Keep height ≤ 22mm to match top margin (28mm).
+  return `<div style="
+    width:100%;
+    padding:4mm 14mm 0;
+    font-size:8pt;
+    color:#1a1a1a;
+    direction:rtl;
+    text-align:right;
+    font-family:'Noto Naskh Arabic','Amiri',Georgia,serif;
+    line-height:1.25;
+    -webkit-print-color-adjust:exact;
+    print-color-adjust:exact;
+    box-sizing:border-box;
+  ">
+    <style>
+      .lh-wrap p { margin: 0.1em 0; }
+      .lh-wrap img { display:block; margin:0 auto; max-height:18mm; width:auto; }
+    </style>
+    <div class="lh-wrap">${LETTERHEAD_HTML}</div>
+  </div>`;
+}
+
+function buildFooterTemplate(): string {
+  return `<div style="
+    width:100%;
+    padding:0 14mm 3mm;
+    font-size:8pt;
+    color:#888;
+    text-align:center;
+    font-family:Georgia,'Times New Roman',serif;
+    box-sizing:border-box;
+  "><span class="pageNumber"></span> / <span class="totalPages"></span></div>`;
+}
+
 export async function renderHtmlToPdf(
   bodyHtml: string,
   { title = "Document", rtl = "auto", fontFamily }: RenderOptions = {},
 ): Promise<Uint8Array> {
-  const isRtl = rtl === "auto" ? detectDir(bodyHtml) === "rtl" : rtl;
+  const cleanedBody = stripLeadingLetterhead(bodyHtml ?? "");
+  const isRtl = rtl === "auto" ? detectDir(cleanedBody) === "rtl" : rtl;
   const dir = isRtl ? "rtl" : "ltr";
   const lang = isRtl ? "ar" : "fr";
   const resolvedFont =
     fontFamily ?? (isRtl ? "'Noto Naskh Arabic', 'Amiri', Georgia, serif" : "Georgia, 'Times New Roman', serif");
 
-  const browser = await getBrowser();
   let page;
+  let browser = await getBrowser();
   try {
     page = await browser.newPage();
-  } catch (err) {
+  } catch {
     await recycleBrowser();
-    throw err;
+    browser = await getBrowser();
+    page = await browser.newPage();
   }
 
   try {
@@ -67,19 +127,20 @@ export async function renderHtmlToPdf(
   <title>${escapeHtml(title)}</title>
   <style>
     ${getPdfFontFaceCss()}
-    @page { size: A4; margin: 18mm 16mm; }
+    @page { size: A4; margin: 28mm 14mm 18mm; }
     html, body { background: #fff; color: #1a1a1a; }
     body {
       font-family: ${resolvedFont};
-      font-size: 12pt;
-      line-height: 1.7;
+      font-size: 11pt;
+      line-height: 1.5;
       margin: 0;
       padding: 0;
     }
-    h1, h2, h3 { font-weight: 700; margin: 0.8em 0 0.4em; }
-    p { margin: 0 0 0.6em; }
-    table { width: 100%; border-collapse: collapse; margin: 0.6em 0; }
-    table, th, td { border: 1px solid #444; padding: 4px 6px; }
+    h1, h2, h3 { font-weight: 700; margin: 0.5em 0 0.25em; }
+    p { margin: 0 0 0.45em; }
+    table { width: 100%; border-collapse: collapse; margin: 0.5em 0; }
+    th { border-bottom: 1px solid #888; padding: 4px 6px; text-align: inherit; }
+    td { padding: 4px 6px; }
     .legal-document { max-width: 100%; }
     img { max-width: 100%; height: auto; }
     [style*="text-align: center"] { text-align: center; }
@@ -90,15 +151,12 @@ export async function renderHtmlToPdf(
     sub, sup { font-size: 0.75em; line-height: 0; }
     u { text-decoration: underline; }
     a { color: #1a4f8a; text-decoration: underline; }
-    .letterhead { direction: rtl; text-align: right; margin: 0 0 12mm; padding-bottom: 6mm; border-bottom: 1px solid #888; }
-    .letterhead img { display: block; margin: 0 auto; max-height: 28mm; width: auto; }
-    .letterhead p { margin: 0.15em 0; }
   </style>
 </head>
-<body><div class="letterhead" dir="rtl" lang="ar">${LETTERHEAD_HTML}</div>${bodyHtml}</body>
+<body>${cleanedBody}</body>
 </html>`;
 
-    await page.setContent(html, { waitUntil: "domcontentloaded", timeout: 5000 });
+    await page.setContent(html, { waitUntil: "domcontentloaded", timeout: 15000 });
 
     await Promise.race([
       page.evaluate(
@@ -123,7 +181,14 @@ export async function renderHtmlToPdf(
       new Promise((r) => setTimeout(r, 3000)),
     ]);
 
-    const pdf = await page.pdf({ format: "A4", printBackground: true });
+    const pdf = await page.pdf({
+      format: "A4",
+      printBackground: true,
+      displayHeaderFooter: true,
+      headerTemplate: buildHeaderTemplate(),
+      footerTemplate: buildFooterTemplate(),
+      margin: { top: "28mm", right: "14mm", bottom: "18mm", left: "14mm" },
+    });
     return pdf;
   } catch (err) {
     await recycleBrowser();

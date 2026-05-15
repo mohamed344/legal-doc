@@ -218,7 +218,17 @@ export default function DocumentsPage() {
     setDownloadingId(d.id);
     try {
       const res = await fetch(`/api/documents/${d.id}/pdf`);
-      if (!res.ok) throw new Error("pdf_failed");
+      if (!res.ok) {
+        let detail = "";
+        try {
+          const body = (await res.json()) as { error?: string; message?: string };
+          detail = body.message || body.error || "";
+        } catch {
+          // not JSON — keep generic
+        }
+        toast.error(detail ? `${tActions("downloadFailed")} — ${detail}` : tActions("downloadFailed"));
+        return;
+      }
       const blob = await res.blob();
       const url = URL.createObjectURL(blob);
       const a = document.createElement("a");
@@ -228,8 +238,9 @@ export default function DocumentsPage() {
       a.click();
       a.remove();
       URL.revokeObjectURL(url);
-    } catch {
-      toast.error(tActions("downloadFailed"));
+    } catch (err) {
+      const msg = err instanceof Error ? err.message : "";
+      toast.error(msg ? `${tActions("downloadFailed")} — ${msg}` : tActions("downloadFailed"));
     } finally {
       setDownloadingId(null);
     }

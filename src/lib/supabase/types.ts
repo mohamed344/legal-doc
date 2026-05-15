@@ -83,6 +83,17 @@ export interface Document {
   updated_at: string;
 }
 
+export type InvoiceCustomFieldType = "text" | "number" | "date";
+export type InvoiceCustomFieldDisplay = "inline" | "block" | "table";
+
+export interface InvoiceCustomField {
+  id: string;
+  label: string;
+  value: string;
+  type: InvoiceCustomFieldType;
+  display: InvoiceCustomFieldDisplay;
+}
+
 export interface Invoice {
   id: string;
   number: string;
@@ -93,6 +104,7 @@ export interface Invoice {
   issued_at: string;
   due_at: string | null;
   notes: string | null;
+  custom_fields: InvoiceCustomField[];
   created_by: string;
   created_at: string;
 }
