@@ -62,30 +62,6 @@ export interface RenderOptions {
   fontFamily?: string;
 }
 
-function buildHeaderTemplate(): string {
-  // Puppeteer renders headerTemplate at zoom 100% with no inherited styles,
-  // so inline everything. Keep height ≤ 22mm to match top margin (28mm).
-  return `<div style="
-    width:100%;
-    padding:4mm 14mm 0;
-    font-size:8pt;
-    color:#1a1a1a;
-    direction:rtl;
-    text-align:right;
-    font-family:'Noto Naskh Arabic','Amiri',Georgia,serif;
-    line-height:1.25;
-    -webkit-print-color-adjust:exact;
-    print-color-adjust:exact;
-    box-sizing:border-box;
-  ">
-    <style>
-      .lh-wrap p { margin: 0.1em 0; }
-      .lh-wrap img { display:block; margin:0 auto; max-height:18mm; width:auto; }
-    </style>
-    <div class="lh-wrap">${LETTERHEAD_HTML}</div>
-  </div>`;
-}
-
 function buildFooterTemplate(): string {
   return `<div style="
     width:100%;
@@ -127,7 +103,7 @@ export async function renderHtmlToPdf(
   <title>${escapeHtml(title)}</title>
   <style>
     ${getPdfFontFaceCss()}
-    @page { size: A4; margin: 28mm 14mm 18mm; }
+    @page { size: A4; margin: 16mm 14mm 18mm; }
     html, body { background: #fff; color: #1a1a1a; }
     body {
       font-family: ${resolvedFont};
@@ -151,9 +127,17 @@ export async function renderHtmlToPdf(
     sub, sup { font-size: 0.75em; line-height: 0; }
     u { text-decoration: underline; }
     a { color: #1a4f8a; text-decoration: underline; }
+    /* Letterhead — rendered once at the top of page 1, matching the docx. */
+    .pdf-letterhead { margin: 0 0 10mm; }
+    .pdf-letterhead table { table-layout: fixed; width: 100%; border-collapse: collapse; }
+    .pdf-letterhead td { padding: 0 4px; vertical-align: top; }
+    .pdf-letterhead p { margin: 0.1em 0; }
+    .pdf-letterhead h1 { font-size: 18pt; margin: 0.25em 0; }
+    .pdf-letterhead img { max-width: 100%; height: auto; max-height: 30mm; }
+    .pdf-letterhead-rule { border: none; border-bottom: 1px solid #999; margin: 0 0 6mm; }
   </style>
 </head>
-<body>${cleanedBody}</body>
+<body><div class="pdf-letterhead">${LETTERHEAD_HTML}</div><hr class="pdf-letterhead-rule" />${cleanedBody}</body>
 </html>`;
 
     await page.setContent(html, { waitUntil: "domcontentloaded", timeout: 15000 });
@@ -185,9 +169,9 @@ export async function renderHtmlToPdf(
       format: "A4",
       printBackground: true,
       displayHeaderFooter: true,
-      headerTemplate: buildHeaderTemplate(),
+      headerTemplate: "<div></div>",
       footerTemplate: buildFooterTemplate(),
-      margin: { top: "28mm", right: "14mm", bottom: "18mm", left: "14mm" },
+      margin: { top: "16mm", right: "14mm", bottom: "18mm", left: "14mm" },
     });
     return pdf;
   } catch (err) {
