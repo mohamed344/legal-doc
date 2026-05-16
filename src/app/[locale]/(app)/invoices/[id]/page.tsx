@@ -1,8 +1,24 @@
 "use client";
 
 import { useEffect, useState } from "react";
-import { useParams, useRouter } from "next/navigation";
+import { useParams, useRouter, useSearchParams } from "next/navigation";
 import { useLocale, useTranslations } from "next-intl";
+
+// Arabic strings used only inside the printable facture card / table content.
+const AR_CONTENT = {
+  invoiceLabel: "تقدير مصاريف",
+  brand: "Commitforce",
+  brandSub: "مكتب محاماة",
+  billTo: "العميل",
+  dueAt: "تاريخ الاستحقاق",
+  description: "الوصف",
+  quantity: "الكمية",
+  unitPrice: "سعر الوحدة",
+  amount: "المبلغ",
+  rowNumber: "ر.ت",
+  subtotal: "المجموع الفرعي",
+  total: "المجموع",
+};
 import { ArrowLeft, Download, Plus, Settings2, Trash2, Save, X } from "lucide-react";
 import { toast } from "sonner";
 import { Button } from "@/components/ui/button";
@@ -25,6 +41,7 @@ import type {
   InvoiceCustomFieldDisplay,
   InvoiceCustomFieldType,
   InvoiceLine,
+  InvoiceLineColumn,
   Client,
 } from "@/lib/supabase/types";
 
@@ -52,12 +69,13 @@ export default function InvoiceDetailPage() {
   const tStatus = useTranslations("invoices.statuses");
   const locale = useLocale();
   const router = useRouter();
+  const searchParams = useSearchParams();
   const { id } = useParams<{ id: string }>();
   const [inv, setInv] = useState<Invoice | null>(null);
   const [lines, setLines] = useState<InvoiceLine[]>([]);
   const [client, setClient] = useState<Client | null>(null);
   const [fields, setFields] = useState<InvoiceCustomField[]>([]);
-  const [customizing, setCustomizing] = useState(false);
+  const [customizing, setCustomizing] = useState(searchParams?.get("edit") === "1");
   const [savingFields, setSavingFields] = useState(false);
 
   useEffect(() => {
@@ -251,16 +269,16 @@ export default function InvoiceDetailPage() {
       )}
 
       <Card>
-        <CardContent className="p-8 md:p-12 space-y-8 bg-paper">
+        <CardContent className="p-8 md:p-12 space-y-8 bg-paper" dir="rtl" lang="ar">
           <header className="flex items-start justify-between">
             <div>
-              <div className="font-display text-3xl">Commitforce</div>
-              <div className="text-sm text-muted-foreground">Cabinet d&apos;avocats</div>
+              <div className="font-display text-3xl">{AR_CONTENT.brand}</div>
+              <div className="text-sm text-muted-foreground">{AR_CONTENT.brandSub}</div>
             </div>
             <div className="text-end">
-              <div className="text-xs uppercase tracking-wider text-muted-foreground">Facture</div>
+              <div className="text-xs uppercase tracking-wider text-muted-foreground">{AR_CONTENT.invoiceLabel}</div>
               <div className="font-display text-2xl">{inv.number}</div>
-              <div className="text-sm text-muted-foreground mt-1">{formatDate(inv.issued_at, locale)}</div>
+              <div className="text-sm text-muted-foreground mt-1">{formatDate(inv.issued_at, "ar")}</div>
             </div>
           </header>
 
@@ -268,15 +286,15 @@ export default function InvoiceDetailPage() {
 
           <div className="grid gap-4 md:grid-cols-2">
             <div>
-              <div className="text-xs uppercase tracking-wider text-muted-foreground mb-1">Facturé à</div>
+              <div className="text-xs uppercase tracking-wider text-muted-foreground mb-1">{AR_CONTENT.billTo}</div>
               <div className="font-medium">{client?.name ?? "—"}</div>
               {client?.address && <div className="text-sm text-muted-foreground">{client.address}</div>}
               {client?.email && <div className="text-sm text-muted-foreground">{client.email}</div>}
             </div>
             {inv.due_at && (
               <div className="md:text-end">
-                <div className="text-xs uppercase tracking-wider text-muted-foreground mb-1">{t("dueAt")}</div>
-                <div className="font-medium">{formatDate(inv.due_at, locale)}</div>
+                <div className="text-xs uppercase tracking-wider text-muted-foreground mb-1">{AR_CONTENT.dueAt}</div>
+                <div className="font-medium">{formatDate(inv.due_at, "ar")}</div>
               </div>
             )}
           </div>
@@ -309,7 +327,7 @@ export default function InvoiceDetailPage() {
                 <tbody>
                   {tableFields.map((f) => (
                     <tr key={f.id} className="border-b border-border/40">
-                      <td className="py-2 pr-4 text-muted-foreground w-1/3">{f.label}</td>
+                      <td className="py-2 pe-4 text-muted-foreground w-1/3">{f.label}</td>
                       <td className="py-2 font-medium">{formatFieldValue(f, locale)}</td>
                     </tr>
                   ))}
@@ -318,38 +336,88 @@ export default function InvoiceDetailPage() {
             </div>
           )}
 
-          <div className="overflow-x-auto">
-            <table className="w-full text-sm min-w-[560px]">
-              <thead>
-                <tr className="border-b border-border/60">
-                  <th className="text-start py-2 font-medium text-muted-foreground">{t("description")}</th>
-                  <th className="text-end py-2 font-medium text-muted-foreground">{t("quantity")}</th>
-                  <th className="text-end py-2 font-medium text-muted-foreground">{t("unitPrice")}</th>
-                  <th className="text-end py-2 font-medium text-muted-foreground">{t("amount")}</th>
-                </tr>
-              </thead>
-              <tbody>
-                {lines.map((l) => (
-                  <tr key={l.id} className="border-b border-border/40">
-                    <td className="py-3">{l.description}</td>
-                    <td className="py-3 text-end numerals-display">{l.qty}</td>
-                    <td className="py-3 text-end numerals-display">{formatDA(Number(l.unit_price))}</td>
-                    <td className="py-3 text-end numerals-display">{formatDA(Number(l.amount))}</td>
+          {inv.line_columns && inv.line_columns.length > 0 ? (
+            <div className="overflow-x-auto">
+              <table className="w-full text-sm border-collapse border border-border/60">
+                <thead>
+                  <tr className="bg-muted/30">
+                    <th className="border border-border/60 py-2 px-2 text-center text-xs font-medium text-muted-foreground w-10">
+                      {AR_CONTENT.rowNumber}
+                    </th>
+                    {inv.line_columns.map((c: InvoiceLineColumn) => (
+                      <th
+                        key={c.id}
+                        className="border border-border/60 py-2 px-2 text-right text-xs font-medium text-muted-foreground"
+                      >
+                        {c.label}
+                      </th>
+                    ))}
                   </tr>
-                ))}
-              </tbody>
-            </table>
-          </div>
+                </thead>
+                <tbody>
+                  {lines.map((l, idx) => (
+                    <tr key={l.id}>
+                      <td className="border border-border/60 py-2 px-2 text-center numerals-display">
+                        {idx + 1}
+                      </td>
+                      {inv.line_columns.map((c: InvoiceLineColumn) => {
+                        const raw = (l.values ?? {})[c.id] ?? "";
+                        const display =
+                          c.type === "number"
+                            ? raw === ""
+                              ? "—"
+                              : formatDA(Number(raw))
+                            : raw || "—";
+                        return (
+                          <td
+                            key={c.id}
+                            className={`border border-border/60 py-2 px-2 text-right ${
+                              c.type === "number" ? "numerals-display" : ""
+                            } ${c.isTotal ? "font-semibold" : ""}`}
+                          >
+                            {display}
+                          </td>
+                        );
+                      })}
+                    </tr>
+                  ))}
+                </tbody>
+              </table>
+            </div>
+          ) : (
+            <div className="overflow-x-auto">
+              <table className="w-full text-sm min-w-[560px]">
+                <thead>
+                  <tr className="border-b border-border/60">
+                    <th className="text-start py-2 font-medium text-muted-foreground">{AR_CONTENT.description}</th>
+                    <th className="text-end py-2 font-medium text-muted-foreground">{AR_CONTENT.quantity}</th>
+                    <th className="text-end py-2 font-medium text-muted-foreground">{AR_CONTENT.unitPrice}</th>
+                    <th className="text-end py-2 font-medium text-muted-foreground">{AR_CONTENT.amount}</th>
+                  </tr>
+                </thead>
+                <tbody>
+                  {lines.map((l) => (
+                    <tr key={l.id} className="border-b border-border/40">
+                      <td className="py-3">{l.description}</td>
+                      <td className="py-3 text-end numerals-display">{l.qty}</td>
+                      <td className="py-3 text-end numerals-display">{formatDA(Number(l.unit_price))}</td>
+                      <td className="py-3 text-end numerals-display">{formatDA(Number(l.amount))}</td>
+                    </tr>
+                  ))}
+                </tbody>
+              </table>
+            </div>
+          )}
 
-          <div className="flex justify-end">
+          <div className="flex justify-start">
             <div className="w-full max-w-xs space-y-2">
               <div className="flex items-center justify-between text-sm">
-                <span className="text-muted-foreground">{t("subtotal")}</span>
+                <span className="text-muted-foreground">{AR_CONTENT.subtotal}</span>
                 <span className="numerals-display">{formatDA(Number(inv.subtotal))}</span>
               </div>
               <div className="divider-wave opacity-40" />
               <div className="flex items-center justify-between">
-                <span className="font-display text-lg">{t("total")}</span>
+                <span className="font-display text-lg">{AR_CONTENT.total}</span>
                 <span className="font-display text-2xl">{formatDA(Number(inv.total))}</span>
               </div>
             </div>

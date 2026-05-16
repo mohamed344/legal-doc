@@ -1,36 +1,35 @@
 import { NextResponse } from "next/server";
-import { Document, Page, Text, View, StyleSheet, renderToBuffer } from "@react-pdf/renderer";
-import React from "react";
 import { createClient } from "@/lib/supabase/server";
-import type { InvoiceCustomField } from "@/lib/supabase/types";
+import { renderHtmlToPdf } from "@/lib/pdf/render";
+import type {
+  Invoice,
+  InvoiceCustomField,
+  InvoiceLine,
+  InvoiceLineColumn,
+  Client,
+} from "@/lib/supabase/types";
 
-const styles = StyleSheet.create({
-  page: { fontSize: 10, padding: 40, fontFamily: "Helvetica", color: "#2A2A2A" },
-  headerRow: { flexDirection: "row", justifyContent: "space-between", marginBottom: 16 },
-  brand: { fontSize: 24, fontFamily: "Times-Roman", color: "#2E5A3F" },
-  brandSub: { fontSize: 9, color: "#6B6B6B", marginTop: 2 },
-  invoiceLabel: { fontSize: 9, color: "#6B6B6B", textAlign: "right", textTransform: "uppercase", letterSpacing: 1 },
-  invoiceNumber: { fontSize: 18, fontFamily: "Times-Roman", textAlign: "right", marginTop: 2 },
-  divider: { borderBottom: "1px solid #C6B89C", marginVertical: 16 },
-  billTo: { flexDirection: "row", justifyContent: "space-between", marginBottom: 18 },
-  label: { fontSize: 8, color: "#6B6B6B", textTransform: "uppercase", letterSpacing: 1, marginBottom: 3 },
-  thead: { flexDirection: "row", borderBottom: "1px solid #C6B89C", paddingBottom: 6, marginBottom: 6 },
-  th: { fontSize: 8, color: "#6B6B6B", textTransform: "uppercase", letterSpacing: 1 },
-  tr: { flexDirection: "row", borderBottom: "0.5px solid #E2D6B8", paddingVertical: 8 },
-  td: { fontSize: 10 },
-  totalRow: { flexDirection: "row", justifyContent: "flex-end", marginTop: 20 },
-  totalBox: { width: 220 },
-  totalLabel: { fontSize: 13, fontFamily: "Times-Roman" },
-  totalValue: { fontSize: 18, fontFamily: "Times-Roman", textAlign: "right" },
-  inlineWrap: { flexDirection: "row", flexWrap: "wrap", marginBottom: 14 },
-  inlineCell: { marginRight: 24, marginBottom: 8, minWidth: 110 },
-  blockWrap: { marginBottom: 14 },
-  blockItem: { marginBottom: 8 },
-  fieldValue: { fontSize: 10 },
-  kvRow: { flexDirection: "row", borderBottom: "0.5px solid #E2D6B8", paddingVertical: 6 },
-  kvKey: { flex: 1, color: "#6B6B6B" },
-  kvVal: { flex: 2 },
-});
+function esc(s: string | null | undefined): string {
+  if (s == null) return "";
+  return String(s)
+    .replace(/&/g, "&amp;")
+    .replace(/</g, "&lt;")
+    .replace(/>/g, "&gt;")
+    .replace(/"/g, "&quot;")
+    .replace(/'/g, "&#39;");
+}
+
+function fmtDA(n: number): string {
+  if (!Number.isFinite(n)) return "—";
+  return `${new Intl.NumberFormat("fr-FR").format(n)} د.ج`;
+}
+
+function fmtDate(d: string | null): string {
+  if (!d) return "";
+  const date = new Date(d);
+  if (Number.isNaN(date.getTime())) return d;
+  return date.toLocaleDateString("ar-DZ", { day: "2-digit", month: "long", year: "numeric" });
+}
 
 function formatCustomFieldValue(f: InvoiceCustomField): string {
   if (!f.value) return "—";
@@ -38,21 +37,104 @@ function formatCustomFieldValue(f: InvoiceCustomField): string {
     const n = Number(f.value);
     return Number.isFinite(n) ? new Intl.NumberFormat("fr-FR").format(n) : f.value;
   }
-  if (f.type === "date") {
-    const d = new Date(f.value);
-    return Number.isNaN(d.getTime())
-      ? f.value
-      : d.toLocaleDateString("fr-FR", { day: "2-digit", month: "short", year: "numeric" });
-  }
+  if (f.type === "date") return fmtDate(f.value);
   return f.value;
 }
 
-function formatDA(amount: number) {
-  return `${new Intl.NumberFormat("fr-FR").format(amount)} DA`;
+function renderCustomFields(fields: InvoiceCustomField[]): string {
+  if (fields.length === 0) return "";
+  const inline = fields.filter((f) => f.display === "inline");
+  const block = fields.filter((f) => f.display === "block");
+  const table = fields.filter((f) => f.display === "table");
+
+  let out = "";
+  if (inline.length) {
+    out += `<div style="display:flex;flex-wrap:wrap;gap:14px 28px;margin:10px 0;">`;
+    for (const f of inline) {
+      out += `<div style="min-width:120px;"><div style="font-size:8pt;color:#6b6b6b;text-transform:uppercase;letter-spacing:1px;">${esc(f.label)}</div><div style="font-size:11pt;">${esc(formatCustomFieldValue(f))}</div></div>`;
+    }
+    out += `</div>`;
+  }
+  if (block.length) {
+    out += `<div style="margin:10px 0;">`;
+    for (const f of block) {
+      out += `<div style="margin-bottom:6px;"><div style="font-size:8pt;color:#6b6b6b;text-transform:uppercase;letter-spacing:1px;">${esc(f.label)}</div><div>${esc(formatCustomFieldValue(f))}</div></div>`;
+    }
+    out += `</div>`;
+  }
+  if (table.length) {
+    out += `<table style="width:100%;border-collapse:collapse;margin:8px 0;"><tbody>`;
+    for (const f of table) {
+      out += `<tr><td style="padding:4px 6px;color:#6b6b6b;border-bottom:1px solid #e2d6b8;width:35%;">${esc(f.label)}</td><td style="padding:4px 6px;border-bottom:1px solid #e2d6b8;">${esc(formatCustomFieldValue(f))}</td></tr>`;
+    }
+    out += `</tbody></table>`;
+  }
+  return out;
 }
 
-function formatDate(d: string) {
-  return new Date(d).toLocaleDateString("fr-FR", { day: "2-digit", month: "short", year: "numeric" });
+function computeRowTotal(columns: InvoiceLineColumn[], values: Record<string, string>): number {
+  let total = 0;
+  for (const c of columns) {
+    if (c.type !== "number" || c.isTotal) continue;
+    const n = Number(values[c.id]);
+    if (Number.isFinite(n)) total += n;
+  }
+  return total;
+}
+
+function renderDynamicLinesTable(columns: InvoiceLineColumn[], lines: InvoiceLine[]): string {
+  const headers = columns
+    .map(
+      (c) =>
+        `<th style="border:1px solid #c6b89c;padding:6px 8px;background:#f5efde;font-size:10pt;font-weight:700;text-align:center;">${esc(c.label)}</th>`,
+    )
+    .join("");
+  const rnHeader = `<th style="border:1px solid #c6b89c;padding:6px 8px;background:#f5efde;font-size:10pt;font-weight:700;text-align:center;width:36px;">ر.ت</th>`;
+
+  const body = lines
+    .map((l, idx) => {
+      const v = (l.values ?? {}) as Record<string, string>;
+      const cells = columns
+        .map((c) => {
+          let display: string;
+          if (c.isTotal) {
+            display = fmtDA(computeRowTotal(columns, v));
+          } else if (c.type === "number") {
+            const raw = v[c.id];
+            display = raw === undefined || raw === "" ? "—" : fmtDA(Number(raw));
+          } else {
+            display = esc(v[c.id] ?? "—");
+          }
+          const weight = c.isTotal ? "font-weight:700;" : "";
+          const align = c.type === "number" ? "text-align:center;" : "text-align:right;";
+          return `<td style="border:1px solid #c6b89c;padding:6px 8px;font-size:10pt;${align}${weight}">${display}</td>`;
+        })
+        .join("");
+      return `<tr><td style="border:1px solid #c6b89c;padding:6px 8px;text-align:center;font-size:10pt;">${idx + 1}</td>${cells}</tr>`;
+    })
+    .join("");
+
+  return `<table style="width:100%;border-collapse:collapse;margin:10px 0;"><thead><tr>${rnHeader}${headers}</tr></thead><tbody>${body}</tbody></table>`;
+}
+
+function renderLegacyLinesTable(lines: InvoiceLine[]): string {
+  const head = `<tr>
+    <th style="border:1px solid #c6b89c;padding:6px 8px;background:#f5efde;font-weight:700;">الوصف</th>
+    <th style="border:1px solid #c6b89c;padding:6px 8px;background:#f5efde;font-weight:700;text-align:center;width:60px;">الكمية</th>
+    <th style="border:1px solid #c6b89c;padding:6px 8px;background:#f5efde;font-weight:700;text-align:center;width:110px;">سعر الوحدة</th>
+    <th style="border:1px solid #c6b89c;padding:6px 8px;background:#f5efde;font-weight:700;text-align:center;width:120px;">المبلغ</th>
+  </tr>`;
+  const body = lines
+    .map(
+      (l) => `<tr>
+      <td style="border:1px solid #c6b89c;padding:6px 8px;text-align:right;">${esc(l.description)}</td>
+      <td style="border:1px solid #c6b89c;padding:6px 8px;text-align:center;">${l.qty}</td>
+      <td style="border:1px solid #c6b89c;padding:6px 8px;text-align:center;">${fmtDA(Number(l.unit_price))}</td>
+      <td style="border:1px solid #c6b89c;padding:6px 8px;text-align:center;">${fmtDA(Number(l.amount))}</td>
+    </tr>`,
+    )
+    .join("");
+  return `<table style="width:100%;border-collapse:collapse;margin:10px 0;"><thead>${head}</thead><tbody>${body}</tbody></table>`;
 }
 
 export async function GET(_req: Request, { params }: { params: Promise<{ id: string }> }) {
@@ -61,139 +143,70 @@ export async function GET(_req: Request, { params }: { params: Promise<{ id: str
   const { data: inv } = await supabase.from("invoices").select("*").eq("id", id).single();
   if (!inv) return new NextResponse("Not found", { status: 404 });
   const { data: lines } = await supabase.from("invoice_lines").select("*").eq("invoice_id", id);
-  const { data: client } = await supabase.from("clients").select("*").eq("id", (inv as any).client_id).single();
+  const { data: client } = await supabase
+    .from("clients")
+    .select("*")
+    .eq("id", (inv as Invoice).client_id)
+    .single();
 
-  const customFields: InvoiceCustomField[] = Array.isArray((inv as any).custom_fields)
-    ? ((inv as any).custom_fields as InvoiceCustomField[])
-    : [];
-  const inlineFields = customFields.filter((f) => f.display === "inline");
-  const blockFields = customFields.filter((f) => f.display === "block");
-  const tableFields = customFields.filter((f) => f.display === "table");
+  const invoice = inv as Invoice;
+  const linesArr = (lines as InvoiceLine[]) ?? [];
+  const clientRow = (client as Client) ?? null;
 
-  const inlineNode =
-    inlineFields.length > 0
-      ? React.createElement(
-          View,
-          { style: styles.inlineWrap },
-          ...inlineFields.map((f) =>
-            React.createElement(
-              View,
-              { key: f.id, style: styles.inlineCell },
-              React.createElement(Text, { style: styles.label }, f.label),
-              React.createElement(Text, { style: styles.fieldValue }, formatCustomFieldValue(f))
-            )
-          )
-        )
-      : null;
+  const customFields: InvoiceCustomField[] = Array.isArray(invoice.custom_fields) ? invoice.custom_fields : [];
+  const columns: InvoiceLineColumn[] = Array.isArray(invoice.line_columns) ? invoice.line_columns : [];
 
-  const blockNode =
-    blockFields.length > 0
-      ? React.createElement(
-          View,
-          { style: styles.blockWrap },
-          ...blockFields.map((f) =>
-            React.createElement(
-              View,
-              { key: f.id, style: styles.blockItem },
-              React.createElement(Text, { style: styles.label }, f.label),
-              React.createElement(Text, { style: styles.fieldValue }, formatCustomFieldValue(f))
-            )
-          )
-        )
-      : null;
+  const linesTable =
+    columns.length > 0 ? renderDynamicLinesTable(columns, linesArr) : renderLegacyLinesTable(linesArr);
 
-  const tableNode =
-    tableFields.length > 0
-      ? React.createElement(
-          View,
-          { style: { marginBottom: 14 } },
-          ...tableFields.map((f) =>
-            React.createElement(
-              View,
-              { key: f.id, style: styles.kvRow },
-              React.createElement(Text, { style: styles.kvKey }, f.label),
-              React.createElement(Text, { style: styles.kvVal }, formatCustomFieldValue(f))
-            )
-          )
-        )
-      : null;
+  const body = `
+    <div style="text-align:center;margin-bottom:18px;">
+      <div style="font-size:18pt;font-weight:700;">تقدير مصاريف</div>
+      <div style="font-size:11pt;color:#6b6b6b;margin-top:4px;">رقم الفاتورة: ${esc(invoice.number)} — ${fmtDate(invoice.issued_at)}</div>
+    </div>
 
-  const doc = React.createElement(
-    Document,
-    null,
-    React.createElement(
-      Page,
-      { size: "A4", style: styles.page },
-      React.createElement(
-        View,
-        { style: styles.headerRow },
-        React.createElement(
-          View,
-          null,
-          React.createElement(Text, { style: styles.brand }, "Commitforce"),
-          React.createElement(Text, { style: styles.brandSub }, "Cabinet d'avocats")
-        ),
-        React.createElement(
-          View,
-          null,
-          React.createElement(Text, { style: styles.invoiceLabel }, "Facture"),
-          React.createElement(Text, { style: styles.invoiceNumber }, (inv as any).number),
-          React.createElement(Text, { style: styles.brandSub }, formatDate((inv as any).issued_at))
-        )
-      ),
-      React.createElement(View, { style: styles.divider }),
-      React.createElement(
-        View,
-        { style: styles.billTo },
-        React.createElement(
-          View,
-          null,
-          React.createElement(Text, { style: styles.label }, "Facturé à"),
-          React.createElement(Text, null, (client as any)?.name ?? "—"),
-          React.createElement(Text, { style: styles.brandSub }, (client as any)?.address ?? ""),
-          React.createElement(Text, { style: styles.brandSub }, (client as any)?.email ?? "")
-        )
-      ),
-      inlineNode,
-      blockNode,
-      tableNode,
-      React.createElement(
-        View,
-        { style: styles.thead },
-        React.createElement(Text, { style: [styles.th, { flex: 3 }] }, "Description"),
-        React.createElement(Text, { style: [styles.th, { flex: 1, textAlign: "right" }] }, "Qté"),
-        React.createElement(Text, { style: [styles.th, { flex: 1, textAlign: "right" }] }, "P.U."),
-        React.createElement(Text, { style: [styles.th, { flex: 1, textAlign: "right" }] }, "Montant")
-      ),
-      ...(lines ?? []).map((l: any) =>
-        React.createElement(
-          View,
-          { style: styles.tr, key: l.id },
-          React.createElement(Text, { style: [styles.td, { flex: 3 }] }, l.description),
-          React.createElement(Text, { style: [styles.td, { flex: 1, textAlign: "right" }] }, String(l.qty)),
-          React.createElement(Text, { style: [styles.td, { flex: 1, textAlign: "right" }] }, formatDA(Number(l.unit_price))),
-          React.createElement(Text, { style: [styles.td, { flex: 1, textAlign: "right" }] }, formatDA(Number(l.amount)))
-        )
-      ),
-      React.createElement(
-        View,
-        { style: styles.totalRow },
-        React.createElement(
-          View,
-          { style: styles.totalBox },
-          React.createElement(
-            View,
-            { style: { flexDirection: "row", justifyContent: "space-between", marginBottom: 6 } },
-            React.createElement(Text, { style: styles.totalLabel }, "Total"),
-            React.createElement(Text, { style: styles.totalValue }, formatDA(Number((inv as any).total)))
-          )
-        )
-      )
-    )
-  );
+    <table style="width:100%;border-collapse:collapse;margin-bottom:12px;">
+      <tr>
+        <td style="vertical-align:top;padding:6px 0;width:50%;">
+          <div style="font-size:9pt;color:#6b6b6b;text-transform:uppercase;letter-spacing:1px;">العميل</div>
+          <div style="font-size:12pt;font-weight:700;">${esc(clientRow?.name ?? "—")}</div>
+          ${clientRow?.address ? `<div style="font-size:10pt;color:#555;">${esc(clientRow.address)}</div>` : ""}
+          ${clientRow?.email ? `<div style="font-size:10pt;color:#555;">${esc(clientRow.email)}</div>` : ""}
+        </td>
+        ${
+          invoice.due_at
+            ? `<td style="vertical-align:top;padding:6px 0;width:50%;text-align:left;">
+                <div style="font-size:9pt;color:#6b6b6b;text-transform:uppercase;letter-spacing:1px;">تاريخ الاستحقاق</div>
+                <div style="font-size:12pt;font-weight:700;">${fmtDate(invoice.due_at)}</div>
+              </td>`
+            : ""
+        }
+      </tr>
+    </table>
 
-  const buffer = await renderToBuffer(doc);
-  return new NextResponse(buffer as any, {
-    headers: { "Content-Type": "application/pdf", "Content-Disposition": `attachment; filename="${(inv as any).number}.pdf"` },
+    ${renderCustomFields(customFields)}
+
+    ${linesTable}
+
+    <table style="width:100%;border-collapse:collapse;margin-top:14px;">
+      <tr>
+        <td style="width:60%;"></td>
+        <td style="border:1px solid #c6b89c;padding:8px 10px;background:#f5efde;font-weight:700;font-size:11pt;">المجموع الإجمالي</td>
+        <td style="border:1px solid #c6b89c;padding:8px 10px;text-align:center;font-weight:700;font-size:12pt;">${fmtDA(Number(invoice.total))}</td>
+      </tr>
+    </table>
+  `;
+
+  const pdf = await renderHtmlToPdf(body, {
+    title: `Facture ${invoice.number}`,
+    rtl: true,
+    fontFamily: "'Noto Naskh Arabic', 'Amiri', Georgia, serif",
+  });
+
+  return new NextResponse(pdf as unknown as BodyInit, {
+    headers: {
+      "Content-Type": "application/pdf",
+      "Content-Disposition": `attachment; filename="${invoice.number}.pdf"`,
+    },
   });
 }

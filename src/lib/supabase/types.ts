@@ -94,6 +94,15 @@ export interface InvoiceCustomField {
   display: InvoiceCustomFieldDisplay;
 }
 
+export type InvoiceLineColumnType = "text" | "number";
+
+export interface InvoiceLineColumn {
+  id: string;
+  label: string;
+  type: InvoiceLineColumnType;
+  isTotal?: boolean;
+}
+
 export interface Invoice {
   id: string;
   number: string;
@@ -105,6 +114,7 @@ export interface Invoice {
   due_at: string | null;
   notes: string | null;
   custom_fields: InvoiceCustomField[];
+  line_columns: InvoiceLineColumn[];
   created_by: string;
   created_at: string;
 }
@@ -117,6 +127,7 @@ export interface InvoiceLine {
   qty: number;
   unit_price: number;
   amount: number;
+  values: Record<string, string>;
 }
 
 export interface ArchivedUpload {
