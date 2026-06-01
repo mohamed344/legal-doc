@@ -176,6 +176,7 @@
       "clearClient": "إزالة فلتر العميل"
     },
     "columns": {
+      "fileNumber": "رقم الملف",
       "name": "الاسم",
       "model": "النموذج",
       "owner": "الاسم",

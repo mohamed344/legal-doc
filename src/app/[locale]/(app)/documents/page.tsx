@@ -322,6 +322,7 @@ export default function DocumentsPage() {
           <Table>
             <TableHeader>
               <TableRow>
+                <TableHead>{t("columns.fileNumber")}</TableHead>
                 <TableHead>{t("columns.name")}</TableHead>
                 <TableHead>{t("columns.model")}</TableHead>
                 <TableHead>{t("columns.owner")}</TableHead>
@@ -333,13 +334,16 @@ export default function DocumentsPage() {
             <TableBody>
               {filteredDocs && filteredDocs.length === 0 ? (
                 <TableRow>
-                  <TableCell colSpan={6} className="text-center text-muted-foreground py-8">
+                  <TableCell colSpan={7} className="text-center text-muted-foreground py-8">
                     {t("filters.noResults")}
                   </TableCell>
                 </TableRow>
               ) : (
                 filteredDocs?.map((d) => (
                   <TableRow key={d.id}>
+                    <TableCell className="font-medium numerals-display whitespace-nowrap">
+                      {d.file_number ?? "—"}
+                    </TableCell>
                     <TableCell className="font-medium">
                       <Link href={`/${locale}/documents/${d.id}`} className="hover:text-primary">
                         {d.name}

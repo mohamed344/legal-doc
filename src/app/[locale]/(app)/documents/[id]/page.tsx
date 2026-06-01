@@ -3,7 +3,7 @@
 import { useEffect, useMemo, useState } from "react";
 import { useParams, useRouter, useSearchParams } from "next/navigation";
 import { useLocale, useTranslations } from "next-intl";
-import { ArrowLeft, Download, Pencil, Printer, Save, X } from "lucide-react";
+import { ArrowLeft, Download, Loader2, Pencil, Printer, Save, X } from "lucide-react";
 import { toast } from "sonner";
 import { Button } from "@/components/ui/button";
 import { Card, CardContent } from "@/components/ui/card";
@@ -52,6 +52,7 @@ export default function DocumentViewPage() {
   const [editing, setEditing] = useState(searchParams.get("edit") === "1");
   const [values, setValues] = useState<Record<string, string>>({});
   const [busy, setBusy] = useState(false);
+  const [printing, setPrinting] = useState(false);
 
   useEffect(() => {
     const load = async () => {
@@ -80,26 +81,53 @@ export default function DocumentViewPage() {
 
   const renderedHtml = useMemo(() => {
     if (!doc || !tpl) return "";
-    const source = editing ? values : toStringMap(doc.filled_data ?? {});
+    const source = { ...(editing ? values : toStringMap(doc.filled_data ?? {})) };
+    // The auto-generated file number (YEAR/0001) fills the {{file_number}}
+    // placeholder in the letterhead/header, overriding any manual entry.
+    if (doc.file_number) source.file_number = doc.file_number;
     return stripLeadingLetterhead(fillTemplate(tpl.body_html ?? null, vars, source));
   }, [doc, tpl, vars, editing, values]);
 
   const isRtl = useMemo(() => detectDir(renderedHtml, locale) === "rtl", [renderedHtml, locale]);
 
-  const print = () => {
-    if (!tpl || !doc) return;
-    const w = window.open("", "_blank");
-    if (!w) return;
-    const printDir = detectDir(renderedHtml, locale);
-    const printLang = printDir === "rtl" ? "ar" : "fr";
-    w.document.write(`
-      <html dir="${printDir}" lang="${printLang}"><head><title>${doc.name}</title>
-      <style>body{font-family:${printDir === "rtl" ? "'Traditional Arabic','Geeza Pro',Georgia,serif" : "Georgia,'Times New Roman',serif"};padding:48px;max-width:800px;margin:0 auto;color:#2A2A2A;line-height:1.6}h1,h2,h3{font-weight:700}</style>
-      </head><body>${renderedHtml}</body></html>
-    `);
-    w.document.close();
-    w.focus();
-    setTimeout(() => w.print(), 250);
+  // Print the server-rendered PDF (same output as the download) via a hidden
+  // iframe so the letterhead/RTL layout exactly matches the downloaded file.
+  const print = async () => {
+    if (!doc) return;
+    setPrinting(true);
+    try {
+      const res = await fetch(`/api/documents/${doc.id}/pdf`);
+      if (!res.ok) {
+        let detail = "";
+        try {
+          const body = (await res.json()) as { error?: string; message?: string };
+          detail = body.message || body.error || "";
+        } catch {
+          // not JSON — keep generic
+        }
+        toast.error(detail ? `${tActions("downloadFailed")} — ${detail}` : tActions("downloadFailed"));
+        return;
+      }
+      const url = URL.createObjectURL(await res.blob());
+      const iframe = document.createElement("iframe");
+      iframe.style.display = "none";
+      iframe.src = url;
+      iframe.onload = () => {
+        iframe.contentWindow?.focus();
+        iframe.contentWindow?.print();
+        // Clean up after the print dialog has had time to read the blob.
+        setTimeout(() => {
+          iframe.remove();
+          URL.revokeObjectURL(url);
+        }, 60000);
+      };
+      document.body.appendChild(iframe);
+    } catch (err) {
+      const msg = err instanceof Error ? err.message : "";
+      toast.error(msg ? `${tActions("downloadFailed")} — ${msg}` : tActions("downloadFailed"));
+    } finally {
+      setPrinting(false);
+    }
   };
 
   const startEdit = () => {
@@ -143,6 +171,7 @@ export default function DocumentViewPage() {
           <h1 className="font-display text-display-2 truncate">{doc.name}</h1>
           <div className="flex items-center gap-3 mt-1 text-sm text-muted-foreground">
             <Badge variant="sand">{tStatus(doc.status)}</Badge>
+            {doc.file_number && <span className="numerals-display">{doc.file_number}</span>}
             <span>{formatDate(doc.created_at, locale)}</span>
           </div>
         </div>
@@ -169,8 +198,8 @@ export default function DocumentViewPage() {
                 {tActions("download")}
               </a>
             </Button>
-            <Button variant="outline" onClick={print}>
-              <Printer className="h-4 w-4" />
+            <Button variant="outline" onClick={print} disabled={printing}>
+              {printing ? <Loader2 className="h-4 w-4 animate-spin" /> : <Printer className="h-4 w-4" />}
               {t("print")}
             </Button>
           </div>

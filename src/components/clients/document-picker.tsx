@@ -89,7 +89,7 @@ export function ClientDocumentPicker({ currentClientId, value, onChange }: Props
           className="ps-9"
         />
       </div>
-      <ScrollArea className="h-48 rounded-md border border-border/60">
+      <ScrollArea className="h-36 rounded-md border border-border/60">
         {filtered === null ? (
           <div className="p-3 text-sm text-muted-foreground">Chargement…</div>
         ) : filtered.length === 0 ? (

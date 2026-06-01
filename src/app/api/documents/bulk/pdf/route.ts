@@ -57,7 +57,9 @@ export async function GET(req: Request) {
     const tplVars = (varsByTpl.get(doc.template_id) ?? []).sort(
       (a, b) => a.order_index - b.order_index
     );
-    const html = fillTemplate(tpl?.body_html ?? null, tplVars, doc.filled_data);
+    const filledData = { ...doc.filled_data };
+    if (doc.file_number) filledData.file_number = doc.file_number;
+    const html = fillTemplate(tpl?.body_html ?? null, tplVars, filledData);
     const pdf = await renderHtmlToPdf(html, { title: doc.name });
     let filename = `${sanitize(doc.name)}.pdf`;
     let n = 2;

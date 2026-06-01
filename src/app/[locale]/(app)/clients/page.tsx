@@ -212,11 +212,12 @@ export default function ClientsPage() {
       )}
 
       <Dialog open={dialogOpen} onOpenChange={(o) => { if (!o) closeDialog(); }}>
-        <DialogContent>
+        <DialogContent className="max-w-md">
           <DialogHeader>
             <DialogTitle>{editing ? t("edit") : t("add")}</DialogTitle>
           </DialogHeader>
-          <div className="space-y-4">
+          <div className="space-y-3 [&_input]:h-9 [&_textarea]:min-h-[64px] [&_label]:text-xs">
+
             <div>
               <Label>{t("name")} *</Label>
               <Input value={form.name} onChange={(e) => setForm({ ...form, name: e.target.value })} />
@@ -239,11 +240,11 @@ export default function ClientsPage() {
               <Label>{t("notes")}</Label>
               <Textarea value={form.notes} onChange={(e) => setForm({ ...form, notes: e.target.value })} />
             </div>
-            {dialogOpen && (
+            {editing && (
               <div>
                 <Label>{t("documents")}</Label>
                 <ClientDocumentPicker
-                  currentClientId={editing?.id}
+                  currentClientId={editing.id}
                   value={docIds}
                   onChange={setDocIds}
                 />

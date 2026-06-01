@@ -78,6 +78,9 @@ export interface Document {
   name: string;
   status: DocumentStatus;
   filled_data: Record<string, unknown>;
+  file_number: string | null;
+  file_year: number | null;
+  file_seq: number | null;
   created_by: string;
   created_at: string;
   updated_at: string;

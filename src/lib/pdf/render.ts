@@ -1,4 +1,4 @@
-import puppeteer, { Browser } from "puppeteer";
+import type { Browser } from "puppeteer-core";
 import { getPdfFontFaceCss } from "./fonts";
 import { LETTERHEAD_HTML } from "./letterhead";
 import { stripLeadingLetterhead } from "./strip-letterhead";
@@ -8,11 +8,25 @@ export { stripLeadingLetterhead };
 
 let browserPromise: Promise<Browser> | null = null;
 
+// On AWS Lambda / Vercel the bundled Chrome is unavailable, so use
+// puppeteer-core + @sparticuz/chromium. Locally, fall back to full puppeteer.
+const isServerless = !!process.env.AWS_LAMBDA_FUNCTION_VERSION || !!process.env.VERCEL;
+
 async function launchBrowser(): Promise<Browser> {
-  return puppeteer.launch({
+  if (isServerless) {
+    const chromium = (await import("@sparticuz/chromium")).default;
+    const puppeteerCore = (await import("puppeteer-core")).default;
+    return puppeteerCore.launch({
+      args: [...chromium.args, "--no-sandbox", "--disable-setuid-sandbox"],
+      executablePath: await chromium.executablePath(),
+      headless: true,
+    });
+  }
+  const puppeteer = (await import("puppeteer")).default;
+  return (await puppeteer.launch({
     headless: true,
     args: ["--no-sandbox", "--disable-setuid-sandbox"],
-  });
+  })) as unknown as Browser;
 }
 
 async function pingBrowser(b: Browser): Promise<boolean> {

@@ -35,10 +35,14 @@ export async function GET(_req: Request, { params }: { params: Promise<{ id: str
     .eq("template_id", doc.template_id)
     .order("order_index", { ascending: true });
 
+  // Inject the auto-generated file number (YEAR/0001) into {{file_number}}.
+  const filledData = { ...doc.filled_data };
+  if (doc.file_number) filledData.file_number = doc.file_number;
+
   const filled = fillTemplate(
     tpl?.body_html ?? null,
     (vars ?? []) as TemplateVariable[],
-    doc.filled_data
+    filledData
   );
 
   let pdf: Uint8Array;

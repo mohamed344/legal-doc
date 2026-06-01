@@ -176,6 +176,7 @@
       "clearClient": "Retirer le filtre client"
     },
     "columns": {
+      "fileNumber": "N° dossier",
       "name": "Nom",
       "model": "Modèle",
       "owner": "Nom",
