@@ -143,14 +143,15 @@ export async function renderHtmlToPdf(
     sub, sup { font-size: 0.75em; line-height: 0; }
     u { text-decoration: underline; }
     a { color: #1a4f8a; text-decoration: underline; }
-    /* Letterhead — rendered once at the top of page 1, matching the docx. */
-    .pdf-letterhead { margin: 0 0 10mm; }
+    /* Letterhead — rendered once at the top of page 1, matching the docx.
+       Kept compact so the header band matches the on-screen letterhead. */
+    .pdf-letterhead { margin: 0 0 4mm; font-size: 9pt; line-height: 1.2; }
     .pdf-letterhead table { table-layout: fixed; width: 100%; border-collapse: collapse; }
     .pdf-letterhead td { padding: 0 4px; vertical-align: top; }
-    .pdf-letterhead p { margin: 0.1em 0; }
-    .pdf-letterhead h1 { font-size: 18pt; margin: 0.25em 0; }
-    .pdf-letterhead img { max-width: 100%; height: auto; max-height: 30mm; }
-    .pdf-letterhead-rule { border: none; border-bottom: 1px solid #999; margin: 0 0 6mm; }
+    .pdf-letterhead p { margin: 0.04em 0; }
+    .pdf-letterhead h1 { font-size: 13pt; margin: 0.12em 0; }
+    .pdf-letterhead img { max-width: 100%; height: auto; max-height: 20mm; }
+    .pdf-letterhead-rule { border: none; border-bottom: 1px solid #999; margin: 0 0 3mm; }
   </style>
 </head>
 <body><div class="pdf-letterhead">${injectFileNumber(LETTERHEAD_HTML, fileNumber)}</div><hr class="pdf-letterhead-rule" />${cleanedBody}</body>
