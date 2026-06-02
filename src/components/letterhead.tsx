@@ -1,11 +1,13 @@
 import { LETTERHEAD_HTML } from "@/lib/pdf/letterhead";
+import { injectFileNumber } from "@/lib/pdf/letterhead-fill";
 import { cn } from "@/lib/utils";
 
 interface LetterheadProps {
   className?: string;
+  fileNumber?: string | null;
 }
 
-export function Letterhead({ className }: LetterheadProps) {
+export function Letterhead({ className, fileNumber }: LetterheadProps) {
   return (
     <div
       aria-label="Letterhead"
@@ -21,7 +23,7 @@ export function Letterhead({ className }: LetterheadProps) {
         "[&_img]:inline-block [&_img]:max-h-28 [&_img]:w-auto",
         className,
       )}
-      dangerouslySetInnerHTML={{ __html: LETTERHEAD_HTML }}
+      dangerouslySetInnerHTML={{ __html: injectFileNumber(LETTERHEAD_HTML, fileNumber) }}
     />
   );
 }

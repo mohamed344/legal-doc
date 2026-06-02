@@ -1,6 +1,7 @@
 import type { Browser } from "puppeteer-core";
 import { getPdfFontFaceCss } from "./fonts";
 import { LETTERHEAD_HTML } from "./letterhead";
+import { injectFileNumber } from "./letterhead-fill";
 import { stripLeadingLetterhead } from "./strip-letterhead";
 import { detectDir } from "@/lib/text/direction";
 
@@ -74,6 +75,7 @@ export interface RenderOptions {
   title?: string;
   rtl?: boolean | "auto";
   fontFamily?: string;
+  fileNumber?: string | null;
 }
 
 function buildFooterTemplate(): string {
@@ -90,7 +92,7 @@ function buildFooterTemplate(): string {
 
 export async function renderHtmlToPdf(
   bodyHtml: string,
-  { title = "Document", rtl = "auto", fontFamily }: RenderOptions = {},
+  { title = "Document", rtl = "auto", fontFamily, fileNumber }: RenderOptions = {},
 ): Promise<Uint8Array> {
   const cleanedBody = stripLeadingLetterhead(bodyHtml ?? "");
   const isRtl = rtl === "auto" ? detectDir(cleanedBody) === "rtl" : rtl;
@@ -151,7 +153,7 @@ export async function renderHtmlToPdf(
     .pdf-letterhead-rule { border: none; border-bottom: 1px solid #999; margin: 0 0 6mm; }
   </style>
 </head>
-<body><div class="pdf-letterhead">${LETTERHEAD_HTML}</div><hr class="pdf-letterhead-rule" />${cleanedBody}</body>
+<body><div class="pdf-letterhead">${injectFileNumber(LETTERHEAD_HTML, fileNumber)}</div><hr class="pdf-letterhead-rule" />${cleanedBody}</body>
 </html>`;
 
     await page.setContent(html, { waitUntil: "domcontentloaded", timeout: 15000 });

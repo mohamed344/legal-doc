@@ -60,7 +60,7 @@ export async function GET(req: Request) {
     const filledData = { ...doc.filled_data };
     if (doc.file_number) filledData.file_number = doc.file_number;
     const html = fillTemplate(tpl?.body_html ?? null, tplVars, filledData);
-    const pdf = await renderHtmlToPdf(html, { title: doc.name });
+    const pdf = await renderHtmlToPdf(html, { title: doc.name, fileNumber: doc.file_number });
     let filename = `${sanitize(doc.name)}.pdf`;
     let n = 2;
     while (used.has(filename)) {

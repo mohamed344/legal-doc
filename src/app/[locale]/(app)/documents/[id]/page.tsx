@@ -273,7 +273,7 @@ export default function DocumentViewPage() {
           lang={isRtl ? "ar" : undefined}
           className="prose prose-stone prose-lg max-w-none p-8 md:p-12 leading-relaxed"
         >
-          <Letterhead className="not-prose mb-6" />
+          <Letterhead className="not-prose mb-6" fileNumber={doc.file_number} />
           <div dangerouslySetInnerHTML={{ __html: renderedHtml }} />
         </CardContent>
       </Card>

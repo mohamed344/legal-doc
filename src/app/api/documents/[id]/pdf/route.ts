@@ -47,7 +47,7 @@ export async function GET(_req: Request, { params }: { params: Promise<{ id: str
 
   let pdf: Uint8Array;
   try {
-    pdf = await renderHtmlToPdf(filled, { title: doc.name });
+    pdf = await renderHtmlToPdf(filled, { title: doc.name, fileNumber: doc.file_number });
   } catch (err) {
     console.error("[pdf]", err);
     const message = err instanceof Error ? err.message : "render_failed";
