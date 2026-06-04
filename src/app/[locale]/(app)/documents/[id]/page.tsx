@@ -145,16 +145,20 @@ export default function DocumentViewPage() {
   const saveEdit = async () => {
     if (!doc) return;
     setBusy(true);
-    const { error } = await createClient()
+    // .select() returns the saved row, which includes any file_number the
+    // BEFORE UPDATE trigger assigns to documents that had none (migration 0014).
+    const { data, error } = await createClient()
       .from("documents")
       .update({ filled_data: values, updated_at: new Date().toISOString() })
-      .eq("id", doc.id);
+      .eq("id", doc.id)
+      .select()
+      .single();
     setBusy(false);
     if (error) {
       toast.error(error.message);
       return;
     }
-    setDoc({ ...doc, filled_data: values });
+    setDoc((data as Document) ?? { ...doc, filled_data: values });
     setEditing(false);
     toast.success(tActions("saved"));
   };

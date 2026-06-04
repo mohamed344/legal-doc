@@ -3,7 +3,7 @@
 import { useEffect, useMemo, useState } from "react";
 import { useRouter, useSearchParams } from "next/navigation";
 import { useLocale, useTranslations } from "next-intl";
-import { ArrowLeft, Eye, Printer, Save } from "lucide-react";
+import { ArrowLeft, Download, Eye, Loader2, Printer, Save } from "lucide-react";
 import { toast } from "sonner";
 import { Button } from "@/components/ui/button";
 import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
@@ -13,6 +13,8 @@ import { Checkbox } from "@/components/ui/checkbox";
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@/components/ui/select";
 import { createClient } from "@/lib/supabase/client";
 import { fillTemplate } from "@/lib/render-document";
+import { Letterhead } from "@/components/letterhead";
+import { stripLeadingLetterhead } from "@/lib/pdf/strip-letterhead";
 import type { Template, TemplateVariable, Client } from "@/lib/supabase/types";
 import { detectDir } from "@/lib/text/direction";
 
@@ -32,6 +34,8 @@ export default function NewDocumentPage() {
   const [values, setValues] = useState<Record<string, string | number | boolean>>({});
   const [showPreview, setShowPreview] = useState(false);
   const [saving, setSaving] = useState(false);
+  const [printing, setPrinting] = useState(false);
+  const [downloading, setDownloading] = useState(false);
 
   useEffect(() => {
     const load = async () => {
@@ -92,30 +96,80 @@ export default function NewDocumentPage() {
     router.push(`/${locale}/documents/${(data as any).id}`);
   };
 
-  const print = () => {
-    if (!tpl) return;
-    const w = window.open("", "_blank");
-    if (!w) return;
-    const printDir = detectDir(filledHtml, locale);
-    const printLang = printDir === "rtl" ? "ar" : "fr";
-    const fontStack = printDir === "rtl"
-      ? "'Traditional Arabic','Geeza Pro',Georgia,serif"
-      : "Georgia,'Times New Roman',serif";
-    w.document.write(`
-      <html dir="${printDir}" lang="${printLang}">
-        <head>
-          <title>${docName || tpl.name}</title>
-          <style>
-            body { font-family: ${fontStack}; padding: 48px; max-width: 800px; margin: 0 auto; color: #2A2A2A; line-height: 1.6; }
-            h1, h2, h3 { font-weight: 700; }
-          </style>
-        </head>
-        <body>${filledHtml}</body>
-      </html>
-    `);
-    w.document.close();
-    w.focus();
-    setTimeout(() => w.print(), 250);
+  // Render the unsaved document through the SAME server pipeline used by saved
+  // documents (renderHtmlToPdf), so the print/download output is identical —
+  // A4, 11pt body, compact letterhead, page footer — instead of the browser's
+  // large default font. The server adds the letterhead, so we send the clean
+  // filled body here (no placeholder spans, no letterhead).
+  const requestPreviewPdf = async (failMsg: string): Promise<Blob | null> => {
+    if (!tpl) return null;
+    const html = fillTemplate(tpl.body_html ?? null, vars, values);
+    try {
+      const res = await fetch(`/api/documents/preview/pdf`, {
+        method: "POST",
+        headers: { "content-type": "application/json" },
+        body: JSON.stringify({ html, title: docName || tpl.name }),
+      });
+      if (!res.ok) {
+        let detail = "";
+        try {
+          const b = (await res.json()) as { error?: string; message?: string };
+          detail = b.message || b.error || "";
+        } catch {
+          // not JSON — keep generic
+        }
+        toast.error(detail ? `${failMsg} — ${detail}` : failMsg);
+        return null;
+      }
+      return await res.blob();
+    } catch (err) {
+      const msg = err instanceof Error ? err.message : "";
+      toast.error(msg ? `${failMsg} — ${msg}` : failMsg);
+      return null;
+    }
+  };
+
+  const print = async () => {
+    if (!tpl || printing) return;
+    setPrinting(true);
+    try {
+      const blob = await requestPreviewPdf("Échec de l'impression");
+      if (!blob) return;
+      const url = URL.createObjectURL(blob);
+      const iframe = document.createElement("iframe");
+      iframe.style.display = "none";
+      iframe.src = url;
+      iframe.onload = () => {
+        iframe.contentWindow?.focus();
+        iframe.contentWindow?.print();
+        setTimeout(() => {
+          iframe.remove();
+          URL.revokeObjectURL(url);
+        }, 60000);
+      };
+      document.body.appendChild(iframe);
+    } finally {
+      setPrinting(false);
+    }
+  };
+
+  const download = async () => {
+    if (!tpl || downloading) return;
+    setDownloading(true);
+    try {
+      const blob = await requestPreviewPdf("Échec du téléchargement");
+      if (!blob) return;
+      const url = URL.createObjectURL(blob);
+      const a = document.createElement("a");
+      a.href = url;
+      a.download = `${docName || tpl.name}.pdf`;
+      document.body.appendChild(a);
+      a.click();
+      a.remove();
+      setTimeout(() => URL.revokeObjectURL(url), 10000);
+    } finally {
+      setDownloading(false);
+    }
   };
 
   return (
@@ -130,8 +184,12 @@ export default function NewDocumentPage() {
             <Eye className="h-4 w-4" />
             {showPreview ? "Formulaire" : t("preview")}
           </Button>
-          <Button variant="outline" onClick={print} disabled={!tpl}>
-            <Printer className="h-4 w-4" />
+          <Button variant="outline" onClick={download} disabled={!tpl || downloading}>
+            {downloading ? <Loader2 className="h-4 w-4 animate-spin" /> : <Download className="h-4 w-4" />}
+            {t("actions.download")}
+          </Button>
+          <Button variant="outline" onClick={print} disabled={!tpl || printing}>
+            {printing ? <Loader2 className="h-4 w-4 animate-spin" /> : <Printer className="h-4 w-4" />}
             {t("print")}
           </Button>
           <Button onClick={() => save("valide")} disabled={!tpl || saving}>
@@ -163,11 +221,10 @@ export default function NewDocumentPage() {
         </Card>
       ) : showPreview ? (
         <Card>
-          <CardContent
-            dir={detectDir(filledHtml, locale)}
-            className="prose prose-stone max-w-none p-8"
-            dangerouslySetInnerHTML={{ __html: filledHtml }}
-          />
+          <CardContent dir={detectDir(filledHtml, locale)} className="prose prose-stone max-w-none p-8">
+            <Letterhead className="not-prose mb-6" />
+            <div dangerouslySetInnerHTML={{ __html: stripLeadingLetterhead(filledHtml) }} />
+          </CardContent>
         </Card>
       ) : (
         <div className="grid gap-6 lg:grid-cols-[1fr_1fr]">
@@ -241,11 +298,10 @@ export default function NewDocumentPage() {
             <CardHeader>
               <CardTitle>{t("preview")}</CardTitle>
             </CardHeader>
-            <CardContent
-              dir={detectDir(filledHtml, locale)}
-              className="prose prose-stone max-w-none"
-              dangerouslySetInnerHTML={{ __html: filledHtml }}
-            />
+            <CardContent dir={detectDir(filledHtml, locale)} className="prose prose-stone max-w-none">
+              <Letterhead className="not-prose mb-6" />
+              <div dangerouslySetInnerHTML={{ __html: stripLeadingLetterhead(filledHtml) }} />
+            </CardContent>
           </Card>
         </div>
       )}

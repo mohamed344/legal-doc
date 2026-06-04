@@ -78,23 +78,33 @@ export interface RenderOptions {
   fileNumber?: string | null;
 }
 
-function buildFooterTemplate(): string {
-  return `<div style="
-    width:100%;
-    padding:0 14mm 3mm;
-    font-size:8pt;
-    color:#888;
-    text-align:center;
-    font-family:Georgia,'Times New Roman',serif;
-    box-sizing:border-box;
-  "><span class="pageNumber"></span> / <span class="totalPages"></span></div>`;
+// Manually-built (Tiptap) templates can carry oversized inline font sizes and
+// stacks of empty paragraphs/<br> that blow a short document onto a second page.
+// AI-imported templates don't (their inline styles are stripped on import), so
+// they render compactly at the 11pt body size. Normalise every body the same
+// way: clamp big inline fonts down, drop empty spacing — so all documents stay
+// compact and consistent.
+function compactBody(html: string): string {
+  return html
+    // inline pt font sizes above 12pt → 12pt
+    .replace(/font-size\s*:\s*(\d+(?:\.\d+)?)pt/gi, (m, n) =>
+      parseFloat(n) > 12 ? "font-size:12pt" : m,
+    )
+    // inline px font sizes above 16px → 12pt
+    .replace(/font-size\s*:\s*(\d+(?:\.\d+)?)px/gi, (m, n) =>
+      parseFloat(n) > 16 ? "font-size:12pt" : m,
+    )
+    // drop empty paragraphs (whitespace / &nbsp; / <br> only)
+    .replace(/<p[^>]*>(?:\s|&nbsp;|<br\s*\/?>)*<\/p>/gi, "")
+    // collapse runs of consecutive <br> into a single break
+    .replace(/(?:<br\s*\/?>\s*){2,}/gi, "<br />");
 }
 
 export async function renderHtmlToPdf(
   bodyHtml: string,
   { title = "Document", rtl = "auto", fontFamily, fileNumber }: RenderOptions = {},
 ): Promise<Uint8Array> {
-  const cleanedBody = stripLeadingLetterhead(bodyHtml ?? "");
+  const cleanedBody = compactBody(stripLeadingLetterhead(bodyHtml ?? ""));
   const isRtl = rtl === "auto" ? detectDir(cleanedBody) === "rtl" : rtl;
   const dir = isRtl ? "rtl" : "ltr";
   const lang = isRtl ? "ar" : "fr";
@@ -119,18 +129,20 @@ export async function renderHtmlToPdf(
   <title>${escapeHtml(title)}</title>
   <style>
     ${getPdfFontFaceCss()}
-    @page { size: A4; margin: 16mm 14mm 18mm; }
+    @page { size: A4; margin: 10mm 12mm 12mm; }
     html, body { background: #fff; color: #1a1a1a; }
     body {
       font-family: ${resolvedFont};
-      font-size: 11pt;
-      line-height: 1.5;
+      font-size: 10.5pt;
+      line-height: 1.32;
       margin: 0;
       padding: 0;
     }
-    h1, h2, h3 { font-weight: 700; margin: 0.5em 0 0.25em; }
-    p { margin: 0 0 0.45em; }
-    table { width: 100%; border-collapse: collapse; margin: 0.5em 0; }
+    h1, h2, h3 { font-weight: 700; margin: 0.35em 0 0.15em; }
+    p { margin: 0 0 0.3em; }
+    ul, ol { margin: 0.3em 0; padding-inline-start: 1.4em; }
+    li { margin: 0.08em 0; }
+    table { width: 100%; border-collapse: collapse; margin: 0.35em 0; }
     th { border-bottom: 1px solid #888; padding: 4px 6px; text-align: inherit; }
     td { padding: 4px 6px; }
     .legal-document { max-width: 100%; }
@@ -145,13 +157,13 @@ export async function renderHtmlToPdf(
     a { color: #1a4f8a; text-decoration: underline; }
     /* Letterhead — rendered once at the top of page 1, matching the docx.
        Kept compact so the header band matches the on-screen letterhead. */
-    .pdf-letterhead { margin: 0 0 4mm; font-size: 9pt; line-height: 1.2; }
+    .pdf-letterhead { margin: 0 0 3mm; font-size: 9pt; line-height: 1.2; }
     .pdf-letterhead table { table-layout: fixed; width: 100%; border-collapse: collapse; }
     .pdf-letterhead td { padding: 0 4px; vertical-align: top; }
     .pdf-letterhead p { margin: 0.04em 0; }
     .pdf-letterhead h1 { font-size: 13pt; margin: 0.12em 0; }
     .pdf-letterhead img { max-width: 100%; height: auto; max-height: 20mm; }
-    .pdf-letterhead-rule { border: none; border-bottom: 1px solid #999; margin: 0 0 3mm; }
+    .pdf-letterhead-rule { border: none; border-bottom: 1px solid #999; margin: 0 0 2mm; }
   </style>
 </head>
 <body><div class="pdf-letterhead">${injectFileNumber(LETTERHEAD_HTML, fileNumber)}</div><hr class="pdf-letterhead-rule" />${cleanedBody}</body>
@@ -185,10 +197,8 @@ export async function renderHtmlToPdf(
     const pdf = await page.pdf({
       format: "A4",
       printBackground: true,
-      displayHeaderFooter: true,
-      headerTemplate: "<div></div>",
-      footerTemplate: buildFooterTemplate(),
-      margin: { top: "16mm", right: "14mm", bottom: "18mm", left: "14mm" },
+      displayHeaderFooter: false,
+      margin: { top: "10mm", right: "12mm", bottom: "12mm", left: "12mm" },
     });
     return pdf;
   } catch (err) {
