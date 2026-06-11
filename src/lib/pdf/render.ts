@@ -178,11 +178,26 @@ export async function renderHtmlToPdf(
 
     await page.setContent(html, { waitUntil: "domcontentloaded", timeout: 15000 });
 
+    // Explicitly force-load the embedded Arabic faces, then wait for the font
+    // set to settle. With font-display:block the glyphs stay unpainted until
+    // the woff2 decodes; on a cold serverless function that can take a couple
+    // of seconds, so give it a generous cap (the route's maxDuration is 60s)
+    // rather than the previous 2.5s race that could capture blank Arabic.
     await Promise.race([
-      page.evaluate(
-        () => (document as unknown as { fonts?: { ready: Promise<unknown> } }).fonts?.ready ?? Promise.resolve(),
-      ),
-      new Promise((r) => setTimeout(r, 2500)),
+      page.evaluate(async () => {
+        const fonts = (document as unknown as {
+          fonts?: { ready: Promise<unknown>; load: (f: string) => Promise<unknown> };
+        }).fonts;
+        if (!fonts) return;
+        await Promise.all([
+          fonts.load("400 16px 'Noto Naskh Arabic'"),
+          fonts.load("700 16px 'Noto Naskh Arabic'"),
+          fonts.load("400 16px 'Amiri'"),
+          fonts.load("700 16px 'Amiri'"),
+        ]).catch(() => {});
+        await fonts.ready;
+      }),
+      new Promise((r) => setTimeout(r, 10000)),
     ]);
 
     await Promise.race([
