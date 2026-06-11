@@ -3,6 +3,7 @@ import { createClient } from "@/lib/supabase/server";
 import { renderHtmlToPdf } from "@/lib/pdf/render";
 
 export const runtime = "nodejs";
+export const maxDuration = 60;
 
 // Renders an unsaved document (filled template body) to a PDF using the exact
 // same pipeline as the saved-document routes (renderHtmlToPdf adds the compact

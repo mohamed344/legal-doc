@@ -11,7 +11,14 @@ let browserPromise: Promise<Browser> | null = null;
 
 // On AWS Lambda / Vercel the bundled Chrome is unavailable, so use
 // puppeteer-core + @sparticuz/chromium. Locally, fall back to full puppeteer.
-const isServerless = !!process.env.AWS_LAMBDA_FUNCTION_VERSION || !!process.env.VERCEL;
+// NODE_ENV is set to "production" on every Vercel deployment and to
+// "development" under `next dev`, so it is the dependable signal — Vercel does
+// not reliably expose VERCEL/AWS_* env vars to the function at runtime (e.g.
+// when "Automatically expose System Environment Variables" is off).
+const isServerless =
+  process.env.NODE_ENV === "production" ||
+  !!process.env.AWS_LAMBDA_FUNCTION_VERSION ||
+  !!process.env.VERCEL;
 
 async function launchBrowser(): Promise<Browser> {
   if (isServerless) {
